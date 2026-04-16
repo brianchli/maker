@@ -1,0 +1,19 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    volumes:
+      - ./data/:/root/
+    networks: [traefik, ollama]
+
+networks:
+  ollama:
+    name: ollama
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.11.0.0/24
+          gateway: 172.11.0.1
+  traefik:
+    external: true
