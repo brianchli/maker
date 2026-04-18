@@ -15,7 +15,7 @@ macro_rules! generic_error_wrapper {
 #[derive(Debug)]
 #[allow(dead_code)]
 enum ErrorKind {
-    Server(&'static str),
+    Server(String),
     Other(String),
 }
 
@@ -26,7 +26,7 @@ pub struct ServerError {
 }
 
 impl ServerError {
-    pub fn new(reason: &'static str) -> Self {
+    pub fn new(reason: String) -> Self {
         Self {
             kind: ErrorKind::Server(reason),
         }

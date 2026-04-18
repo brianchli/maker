@@ -14,12 +14,12 @@ use crate::service::{middlewares, shutdown};
 #[tokio::main]
 async fn main() -> Result<(), error::ServerError> {
     let port = std::env::var("BACKEND_PORT")
-        .map_err(|_| error::ServerError::new("Missing backend port"))?;
+        .map_err(|_| error::ServerError::new("Missing backend port".into()))?;
 
     let addr = SocketAddr::from((
         [0, 0, 0, 0],
         port.parse()
-            .map_err(|_| error::ServerError::new("Unable to parse port number"))?,
+            .map_err(|_| error::ServerError::new("Unable to parse port number".into()))?,
     ));
 
     tracing_subscriber::fmt()
