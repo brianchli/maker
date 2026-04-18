@@ -1,12 +1,13 @@
 mod error;
 mod service;
 
-use std::net::SocketAddr;
+use std::{net::SocketAddr, time::Duration};
 
 use hyper::server::conn::http1;
 use hyper_util::{rt::TokioIo, service::TowerToHyperService};
 use service::maker_run;
 use tokio::net::TcpListener;
+use tower::ServiceBuilder;
 use tracing::info;
 
 use crate::service::{middlewares, shutdown};
@@ -27,34 +28,39 @@ async fn main() -> Result<(), error::ServerError> {
         .compact()
         .init();
 
-    let svc = TowerToHyperService::new(
-        tower::ServiceBuilder::new()
-            .concurrency_limit(1)
-            .layer(tower_http::trace::TraceLayer::new_for_http())
-            .layer(middlewares::Timeout::new(1))
-            .service(tower::service_fn(maker_run)),
-    );
+    let svc = ServiceBuilder::new()
+        .concurrency_limit(1)
+        .layer(tower_http::trace::TraceLayer::new_for_http())
+        .layer(middlewares::HttpResponseLayer::new())
+        .layer(middlewares::TimeoutLayer::new(Duration::from_secs(180)))
+        .service(tower::service_fn(maker_run));
+
+    let svc = TowerToHyperService::new(svc);
 
     let listener = TcpListener::bind(addr).await?;
     let http = http1::Builder::new();
     let graceful = hyper_util::server::graceful::GracefulShutdown::new();
     let mut signal = std::pin::pin!(shutdown());
-
     info!("listening on {:?}", &addr);
+    let (tx, _rx) = tokio::sync::broadcast::channel::<u8>(100);
     loop {
         tokio::select! {
             Ok((tcp, _)) = listener.accept() => {
                 let io = TokioIo::new(tcp);
                 let fut = graceful.watch(http.serve_connection(io, svc.clone()));
+                let mut subscribe = tx.subscribe();
                 tokio::spawn(async move {
-                    if let Err(e) = fut.await {
-                       info!("error occurred for request: {:?}", e);
-                    }
+                    tokio::select!{
+                        _ = subscribe.recv() => {},
+                        _ = fut => {}
+                    };
                 });
             },
             _ = &mut signal => {
                 drop(listener);
                 info!("exit signal received");
+                // we currently only send an exit signal
+                let _ = tx.send(0);
                 break;
             }
         }

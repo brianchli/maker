@@ -1,2 +1,3 @@
 mod tower;
-pub use tower::Timeout;
+pub use tower::HttpResponseLayer;
+pub use tower::TimeoutLayer;
