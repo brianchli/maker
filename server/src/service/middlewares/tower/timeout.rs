@@ -7,19 +7,18 @@ use std::{
 use pin_project_lite::pin_project;
 use tower::BoxError;
 
-#[derive(Clone)]
 pub struct TimeoutLayer {
-    duration: u64,
+    duration: Duration,
 }
 
 #[derive(Clone)]
 pub struct TimeoutService<S> {
-    duration: u64,
+    duration: Duration,
     inner: S,
 }
 
 impl TimeoutLayer {
-    pub fn new(duration: u64) -> Self {
+    pub fn new(duration: Duration) -> Self {
         Self { duration }
     }
 }
@@ -47,11 +46,11 @@ pub struct ConditionalTimeoutFuture<T> {
 }
 
 impl<T> ConditionalTimeoutFuture<T> {
-    fn new(response: T, duration: u64, skip: bool) -> Self {
+    fn new(response: T, sleep: tokio::time::Sleep, skip: bool) -> Self {
         Self {
-            skip,
+            skip, // use this basic thing for now - likely to be refactored at some point...
             response,
-            sleep: tokio::time::sleep(Duration::from_secs(duration)),
+            sleep,
         }
     }
 }
@@ -75,7 +74,7 @@ where
 
         if !*this.skip {
             match this.sleep.poll(cx) {
-                Ready(_) => Ready(Err("Elapsed".into())), // TODO: custom error type
+                Ready(_) => Ready(Err("elapsed".into())),
                 Pending => Pending,
             }
         } else {
@@ -105,7 +104,7 @@ where
         let (parts, body) = req.into_parts();
         ConditionalTimeoutFuture::new(
             self.inner.call(hyper::Request::from_parts(parts, body)),
-            self.duration,
+            tokio::time::sleep(self.duration),
             false,
         )
     }

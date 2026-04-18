@@ -1,2 +1,4 @@
+mod httperr;
 mod timeout;
-pub use timeout::TimeoutLayer as Timeout;
+pub use httperr::HttpErrResponseLayer as HttpResponseLayer;
+pub use timeout::TimeoutLayer;
