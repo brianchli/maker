@@ -28,7 +28,6 @@ COPY --from=build /etc/group /etc/group
 USER web:web
 
 COPY --from=build --chown=web:web ./target/release/server /app/server
-COPY --from=build --chown=web:web ./app/config /app/config
 
 EXPOSE ${BACKEND_PORT}
 ENTRYPOINT ["./app/server"]
