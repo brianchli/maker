@@ -65,7 +65,6 @@ async fn main() -> Result<(), error::ServerError> {
             }
         }
     }
-
     tokio::select! {
         _ = graceful.shutdown() => {
             info!("all connections closed");
