@@ -48,10 +48,10 @@ async fn main() -> Result<(), error::ServerError> {
             Ok((tcp, _)) = listener.accept() => {
                 let io = TokioIo::new(tcp);
                 let fut = graceful.watch(http.serve_connection(io, svc.clone()));
-                let mut subscribe = tx.subscribe();
+                let mut shutdown = tx.subscribe();
                 tokio::spawn(async move {
                     tokio::select!{
-                        _ = subscribe.recv() => {},
+                        _ = shutdown.recv() => {},
                         _ = fut => {}
                     };
                 });
