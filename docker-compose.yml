@@ -19,25 +19,18 @@ services:
         ipv4_address: 172.11.0.3
     labels:
       - "traefik.enable=true"
-      - "traefik.http.middlewares.http-to-https.redirectscheme.scheme=https"
       - "traefik.http.routers.maker-http.rule=Host(`maker.app.io`) ||
         Host(`maker`)"
-      - "traefik.http.routers.maker-http.middlewares=http-to-https@file"
       - "traefik.http.routers.maker-http.entrypoints=web"
-
-      - "traefik.http.routers.maker-https.rule=Host(`maker.app.io`) ||
-        Host(`maker`)"
-      - "traefik.http.routers.maker-https.tls=true"
-      - "traefik.http.routers.maker-https.entrypoints=websecure"
-      - "traefik.http.routers.maker-https.service=maker-service"
-      - "traefik.http.services.maker-service.loadbalancer.server.port=3000" # public
+      - "traefik.http.routers.maker-http.service=maker-service"
+      - "traefik.http.services.maker-service.loadbalancer.server.port=8000"
 
       - "traefik.http.routers.maker-public-http.rule=Host(`maker.bidn.dev`)"
       - "traefik.http.routers.maker-public-http.entrypoints=web"
       - "traefik.http.routers.maker-public-http.service=maker-service-public"
       - "traefik.http.services.maker-service-public.loadbalancer.server.scheme=\
         http"
-      - "traefik.http.services.maker-service-public.loadbalancer.server.port=30\
+      - "traefik.http.services.maker-service-public.loadbalancer.server.port=80\
         00"
 
 networks:
