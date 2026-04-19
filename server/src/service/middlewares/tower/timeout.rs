@@ -18,8 +18,10 @@ pub struct TimeoutService<S> {
 }
 
 impl TimeoutLayer {
-    pub fn new(duration: Duration) -> Self {
-        Self { duration }
+    pub fn new(seconds: u64) -> Self {
+        Self {
+            duration: Duration::from_secs(seconds),
+        }
     }
 }
 
