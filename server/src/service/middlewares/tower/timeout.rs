@@ -1,113 +1,60 @@
-use std::{
-    fmt::Debug,
-    task::Poll::{Pending, Ready},
-    time::Duration,
+use std::time::Duration;
+
+use hyper::body::Incoming;
+use tower::timeout::Timeout;
+use tracing::Span;
+
+use crate::service::{
+    Req,
+    middlewares::tower::conditional_impl::{ConditionalService, ConditionalServiceLayer},
 };
 
-use pin_project_lite::pin_project;
-use tower::BoxError;
-
-pub struct TimeoutLayer {
+pub struct TimeoutLayer<F> {
     duration: Duration,
+    layer: ConditionalServiceLayer<F>,
 }
 
-#[derive(Clone)]
-pub struct TimeoutService<S> {
-    duration: Duration,
-    inner: S,
-}
-
-impl TimeoutLayer {
-    pub fn new(seconds: u64) -> Self {
+impl<F> TimeoutLayer<F>
+where
+    F: Clone,
+{
+    pub fn from_secs(seconds: u64, f: F) -> Self {
         Self {
             duration: Duration::from_secs(seconds),
+            layer: ConditionalServiceLayer::new(f),
+        }
+    }
+
+    pub fn from_mins(minutes: u64, f: F) -> Self {
+        Self {
+            duration: Duration::from_mins(minutes),
+            layer: ConditionalServiceLayer::new(f),
         }
     }
 }
 
-impl<S> tower::Layer<S> for TimeoutLayer {
-    type Service = TimeoutService<S>;
+type TimeoutService<S, S1, F, F1> = ConditionalService<S, S1, F, F1>;
+impl<S, F> tower::Layer<S> for TimeoutLayer<F>
+where
+    S: Clone,
+    F: Clone,
+{
+    type Service = TimeoutService<S, tower::timeout::Timeout<S>, F, fn(&Req<Incoming>) -> Span>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        Self::Service {
-            duration: self.duration,
+        let other = inner.clone();
+
+        fn timeout_span<B>(req: &Req<B>) -> Span {
+            tracing::info_span!(
+                "timeout",
+                path = %req.uri().path()
+            )
+        }
+        Self::Service::new(
             inner,
-        }
-    }
-}
-
-pin_project! {
-#[derive(Debug)]
-pub struct ConditionalTimeoutFuture<T> {
-    skip: bool,
-    #[pin]
-    response: T,
-    #[pin]
-    sleep: tokio::time::Sleep
-    }
-}
-
-impl<T> ConditionalTimeoutFuture<T> {
-    fn new(response: T, sleep: tokio::time::Sleep, skip: bool) -> Self {
-        Self {
-            skip, // use this basic thing for now - likely to be refactored at some point...
-            response,
-            sleep,
-        }
-    }
-}
-
-impl<F, T, E> Future for ConditionalTimeoutFuture<F>
-where
-    F: Future<Output = Result<T, E>>,
-    E: Into<BoxError>,
-{
-    type Output = Result<T, BoxError>;
-
-    fn poll(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Self::Output> {
-        let this = self.project();
-        let poll = match this.response.poll(cx) {
-            Ready(v) => return Ready(v.map_err(Into::into)),
-            Pending => Pending,
-        };
-
-        if !*this.skip {
-            match this.sleep.poll(cx) {
-                Ready(_) => Ready(Err("elapsed".into())),
-                Pending => Pending,
-            }
-        } else {
-            poll
-        }
-    }
-}
-
-type Req<B> = hyper::Request<B>;
-impl<S, B> tower::Service<Req<B>> for TimeoutService<S>
-where
-    S: tower::Service<Req<B>>,
-    S::Error: Into<BoxError>,
-{
-    type Response = S::Response;
-    type Error = BoxError;
-    type Future = ConditionalTimeoutFuture<S::Future>;
-
-    fn poll_ready(
-        &mut self,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx).map_err(Into::into)
-    }
-
-    fn call(&mut self, req: Req<B>) -> Self::Future {
-        let (parts, body) = req.into_parts();
-        ConditionalTimeoutFuture::new(
-            self.inner.call(hyper::Request::from_parts(parts, body)),
-            tokio::time::sleep(self.duration),
-            false,
+            Timeout::new(other, self.duration),
+            self.layer.func().clone(),
+            timeout_span,
         )
     }
 }

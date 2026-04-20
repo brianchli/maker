@@ -11,7 +11,6 @@ use hyper::body::Bytes;
 use pin_project_lite::pin_project;
 
 pub struct HttpErrResponseLayer {}
-
 #[derive(Clone)]
 pub struct HttpErrService<S> {
     inner: S,

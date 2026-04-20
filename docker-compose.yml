@@ -11,6 +11,7 @@ services:
     container_name: maker-server
     environment:
       - BACKEND_PORT=${BACKEND_PORT}
+      - BACKEND_PORT=${OLLAMA_PORT}
     volumes:
       - ./config/maker:/app/config
     networks:
@@ -32,6 +33,7 @@ services:
         http"
       - "traefik.http.services.maker-service-public.loadbalancer.server.port=80\
         00"
+    depends_on: [ollama]
 
 networks:
   ollama:
