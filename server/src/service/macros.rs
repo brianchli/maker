@@ -27,20 +27,24 @@ macro_rules! some_or_http_response {
 #[macro_export]
 macro_rules! some_or_err {
     ($expr:expr, $reason:literal) => {
-        $crate::some_or_http_response!($expr, $reason, StatusCode::INTERNAL_SERVER_ERROR)
+        $crate::some_or_http_response!(
+            $expr,
+            $reason,
+            ::hyper::http::StatusCode::INTERNAL_SERVER_ERROR
+        )
     };
 }
 
 #[macro_export]
 macro_rules! server_err {
     ($expr:expr) => {
-        $crate::ok_or_http_response!($expr, StatusCode::INTERNAL_SERVER_ERROR)
+        $crate::ok_or_http_response!($expr, ::hyper::http::StatusCode::INTERNAL_SERVER_ERROR)
     };
 }
 
 #[macro_export]
 macro_rules! bad_request {
     ($expr:expr) => {
-        $crate::ok_or_http_response!($expr, StatusCode::BAD_REQUEST)
+        $crate::ok_or_http_response!($expr, ::hyper::http::StatusCode::BAD_REQUEST)
     };
 }

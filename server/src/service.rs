@@ -12,9 +12,11 @@ use hyper::{
     header::{CONTENT_TYPE, HOST},
 };
 use hyper_util::rt::TokioIo;
-use std::convert::Infallible;
+use std::{convert::Infallible, fmt::Display, path::PathBuf};
 use tokio::net::TcpStream;
 use tower::BoxError;
+
+use crate::service::specification::prompt::{Filetype, ResolvedPrompt, TomlSpec};
 
 type Req<B> = hyper::Request<B>;
 type Response = hyper::Response<BoxBody<Bytes, Infallible>>;
@@ -22,17 +24,29 @@ type Response = hyper::Response<BoxBody<Bytes, Infallible>>;
 #[derive(Clone, Debug)]
 pub(crate) struct AppState {
     ollama_uri: hyper::Uri,
+    specifications: PathBuf,
 }
 
 impl AppState {
-    pub(crate) fn new(ollama_uri: hyper::Uri) -> Self {
-        Self { ollama_uri }
+    pub(crate) fn new(ollama_uri: hyper::Uri, specifications: PathBuf) -> Self {
+        Self {
+            ollama_uri,
+            specifications,
+        }
     }
 }
+
 pub async fn maker_run<B>(
-    AppState { ollama_uri }: AppState,
-    _req: Req<B>,
-) -> Result<Response, BoxError> {
+    AppState {
+        ollama_uri,
+        mut specifications,
+    }: AppState,
+    req: Req<B>,
+) -> Result<Response, BoxError>
+where
+    B: hyper::body::Body,
+    B::Error: Display,
+{
     let stream = server_err!(
         TcpStream::connect(format!(
             "{}:{}",
@@ -43,7 +57,7 @@ pub async fn maker_run<B>(
     );
 
     let io = TokioIo::new(stream);
-    let (mut send, conn) = server_err!(http1::handshake(io).await);
+    let (mut http, conn) = server_err!(http1::handshake(io).await);
 
     tokio::task::spawn(async move {
         Ok::<_, BoxError>(server_err!(
@@ -52,17 +66,27 @@ pub async fn maker_run<B>(
         ))
     });
 
-    // TOOO - replace this with serialisation of a specification
-    let json = r#"
-    {
-        "model": "deepseek-v3.2:cloud",
-        "prompt": "Why is the sky blue?",
-        "stream": false
-    }
-    "#;
+    let (_parts, body) = req.into_parts();
+    let file_t: Filetype = bad_request!(serde_json::from_slice(
+        &server_err!(body.collect().await).to_bytes()
+    ));
+
+    specifications.push(match file_t {
+        Filetype::Make { .. } => "make.toml",
+        Filetype::Cmake { .. } => "cmake.toml",
+        Filetype::Readme { .. } => "readme.toml",
+        Filetype::Docker { .. } => "docker.toml",
+    });
+
+    let spec: TomlSpec = bad_request!(toml::from_slice(
+        server_err!(tokio::fs::read(&specifications).await).as_slice()
+    ));
+
+    let mut prompt: ResolvedPrompt = (spec, file_t).try_into()?;
+    prompt.model.get_or_insert("deepseek-v3.2:cloud".into());
 
     let path = ollama_uri.path();
-    let req = server_err!(
+    let req = bad_request!(
         Request::builder()
             .method(Method::POST)
             .uri(path)
@@ -75,10 +99,12 @@ pub async fn maker_run<B>(
                 .as_str()
             )
             .header(CONTENT_TYPE, r#"application/json"#)
-            .body(Full::<Bytes>::new(json.into()))
+            .body(Full::<Bytes>::new(
+                bad_request!(serde_json::to_string(&prompt)).into()
+            ))
     );
 
-    let res = server_err!(send.send_request(req).await);
+    let res = server_err!(http.send_request(req).await);
     let (parts, body) = res.into_parts();
     let bytes = server_err!(body.collect().await).to_bytes();
     Ok(hyper::Response::from_parts(

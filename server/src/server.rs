@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, path::PathBuf};
 
 use tokio::signal::unix::SignalKind;
 
@@ -9,11 +9,21 @@ pub fn server_init() -> Result<(AppState, SocketAddr), error::ServerError> {
         .map_err(|_| error::ServerError::new("Missing backend port".into()))?;
     let ollama_port = std::env::var("OLLAMA_PORT")
         .map_err(|_| error::ServerError::new("Missing ollama backend port".into()))?;
+    let specifications = PathBuf::from("/app/specifications");
+    if !specifications
+        .try_exists()
+        .map_err(|_| error::ServerError::new("Unable find specifications directory".into()))?
+    {
+        return Err(error::ServerError::new(
+            "Unable find specifications directory".into(),
+        ));
+    }
 
     let state = AppState::new(
         format!("http://ollama:{}/api/generate", ollama_port)
             .parse()
             .map_err(|_| error::ServerError::new("Unable to parse ollama uri".into()))?,
+        specifications,
     );
 
     Ok((
