@@ -88,8 +88,8 @@ where
         let span = (self.span_generator)(&req);
         event!(target:module_path!(),tracing::Level::DEBUG, "call");
         match (self.predicate)(req) {
-            Continue(request) => Either::Left(self.service_1.call(request).instrument(span)),
-            Bypass(request) => Either::Right(self.service_2.call(request).instrument(span)),
+            Continue(request) => Either::Right(self.service_2.call(request).instrument(span)),
+            Bypass(request) => Either::Left(self.service_1.call(request).instrument(span)),
         }
     }
 }

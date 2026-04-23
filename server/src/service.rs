@@ -31,7 +31,7 @@ pub(crate) struct OllamaResponse {
     pub(crate) model: String,
     pub(crate) created_at: String,
     pub(crate) done_reason: String,
-    pub(crate) thinking: String,
+    pub(crate) thinking: Option<String>,
     pub(crate) total_duration: u64,
     pub(crate) prompt_eval_count: u64,
     pub(crate) eval_count: u64,
