@@ -11,7 +11,7 @@ services:
     container_name: maker-server
     environment:
       - BACKEND_PORT=${BACKEND_PORT}
-      - BACKEND_PORT=${OLLAMA_PORT}
+      - OLLAMA_PORT=${OLLAMA_PORT}
     volumes:
       - ./config/maker:/app/config
     networks:
