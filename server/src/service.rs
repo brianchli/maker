@@ -1,3 +1,6 @@
+#[macro_use]
+mod macros;
+mod http;
 pub mod middlewares;
 mod specification;
 
@@ -12,80 +15,9 @@ use hyper_util::rt::TokioIo;
 use std::convert::Infallible;
 use tokio::net::TcpStream;
 use tower::BoxError;
-use tracing::error;
 
 type Req<B> = hyper::Request<B>;
 type Response = hyper::Response<BoxBody<Bytes, Infallible>>;
-
-#[macro_use]
-pub(crate) mod macros {
-
-    #[macro_export]
-    macro_rules! ok_or_http_response {
-        ($expr:expr, $status:expr) => {
-            match $expr {
-                Ok(ok) => ok,
-                Err(e) => {
-                    error!("[{}] {}", $status, e);
-                    return Ok($crate::service::http::error_response($status));
-                }
-            }
-        };
-    }
-
-    #[macro_export]
-    macro_rules! some_or_http_response {
-        ($expr:expr, $reason:literal, $status:expr) => {
-            match $expr {
-                Some(ok) => ok,
-                None => {
-                    error!("[{}] {}", $status, $reason);
-                    return Ok($crate::service::http::error_response($status));
-                }
-            }
-        };
-    }
-
-    #[macro_export]
-    macro_rules! some_or_err {
-        ($expr:expr, $reason:literal) => {
-            some_or_http_response!($expr, $reason, StatusCode::INTERNAL_SERVER_ERROR)
-        };
-    }
-
-    #[macro_export]
-    macro_rules! server_err {
-        ($expr:expr) => {
-            ok_or_http_response!($expr, StatusCode::INTERNAL_SERVER_ERROR)
-        };
-    }
-
-    #[macro_export]
-    macro_rules! bad_request {
-        ($expr:expr) => {
-            ok_or_http_response!($expr, StatusCode::BAD_REQUEST)
-        };
-    }
-}
-
-pub(crate) mod http {
-
-    use super::Response as ServerResponse;
-    use http_body_util::{BodyExt, Empty};
-    use hyper::Response;
-    use hyper::body::Bytes;
-    use hyper::http::StatusCode;
-
-    pub(crate) fn error_response(status_code: StatusCode) -> ServerResponse {
-        let mut resp = Response::new(
-            Empty::<Bytes>::new()
-                .map_err(|never| match never {})
-                .boxed(),
-        );
-        *resp.status_mut() = status_code;
-        resp
-    }
-}
 
 #[derive(Clone, Debug)]
 pub(crate) struct AppState {
@@ -97,7 +29,6 @@ impl AppState {
         Self { ollama_uri }
     }
 }
-
 pub async fn maker_run<B>(
     AppState { ollama_uri }: AppState,
     _req: Req<B>,
@@ -115,11 +46,10 @@ pub async fn maker_run<B>(
     let (mut send, conn) = server_err!(http1::handshake(io).await);
 
     tokio::task::spawn(async move {
-        let res = server_err!(
+        Ok::<_, BoxError>(server_err!(
             conn.await
                 .map(|_| http::error_response(StatusCode::INTERNAL_SERVER_ERROR))
-        );
-        Ok::<_, BoxError>(res)
+        ))
     });
 
     // TOOO - replace this with serialisation of a specification
