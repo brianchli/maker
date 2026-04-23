@@ -4,8 +4,8 @@
 use std::fmt::Write;
 
 use serde::{Deserialize, Serialize};
-use tower::BoxError;
 use std::fmt::Display;
+use tower::BoxError;
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct System {
@@ -38,17 +38,16 @@ pub(crate) enum Filetype {
 }
 
 impl Display for Filetype {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            match &self {
-                Filetype::Make { .. } => write!(f, "Makefile"),
-                Filetype::Cmake { .. } => write!(f, "Cmake"),
-                Filetype::Readme { .. } => write!(f, "Readme"),
-                Filetype::Docker { .. } => write!(f, "Docker"),
-                Filetype::Spec { .. } => write!(f, "Spec"),
-            }
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            Filetype::Make { .. } => write!(f, "Makefile"),
+            Filetype::Cmake { .. } => write!(f, "Cmake"),
+            Filetype::Readme { .. } => write!(f, "Readme"),
+            Filetype::Docker { .. } => write!(f, "Docker"),
+            Filetype::Spec { .. } => write!(f, "Spec"),
         }
     }
-
+}
 
 const SCHEMA: &str = r#";use the following schema: mk=makefile, cm=cmake, dkr=docker, rdme=readme, c=constraints,; constraints are separated with '|';"#;
 impl TryFrom<(TomlSpec, Filetype)> for ResolvedPrompt {
@@ -80,7 +79,7 @@ impl TryFrom<(TomlSpec, Filetype)> for ResolvedPrompt {
                 r#";the output file should be a valid dkr file: {};"#,
                 content
             )?,
-            Filetype::Spec{ content } => write!(
+            Filetype::Spec { content } => write!(
                 &mut prompt,
                 r#";the output file should be a valid toml file: {};"#,
                 content

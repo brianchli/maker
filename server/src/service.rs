@@ -12,16 +12,30 @@ use hyper::{
     header::{CONTENT_TYPE, HOST},
 };
 use hyper_util::rt::TokioIo;
-use tracing::info;
 use std::{convert::Infallible, fmt::Display, path::PathBuf};
 use tokio::net::TcpStream;
 use tower::BoxError;
+use tracing::info;
 
-use serde::Deserialize;
 use crate::service::specification::prompt::{Filetype, ResolvedPrompt, TomlSpec};
+use serde::Deserialize;
 
 type Req<B> = hyper::Request<B>;
 type Response = hyper::Response<BoxBody<Bytes, Infallible>>;
+
+#[allow(dead_code)]
+#[derive(Deserialize, Debug)]
+pub(crate) struct OllamaResponse {
+    pub(crate) response: String,
+    pub(crate) done: bool,
+    pub(crate) model: String,
+    pub(crate) created_at: String,
+    pub(crate) done_reason: String,
+    pub(crate) thinking: String,
+    pub(crate) total_duration: u64,
+    pub(crate) prompt_eval_count: u64,
+    pub(crate) eval_count: u64,
+}
 
 #[derive(Clone, Debug)]
 pub(crate) struct AppState {
@@ -36,19 +50,6 @@ impl AppState {
             specifications,
         }
     }
-}
-
-#[derive(Deserialize, Debug)]
-pub(crate) struct OllamaResponse {
-    pub(crate) response: String,
-    pub(crate) done: bool,
-    pub(crate) model: String,
-    pub(crate) created_at: String,
-    pub(crate) done_reason: String,
-    pub(crate) thinking: String,
-    pub(crate) total_duration: u64,
-    pub(crate) prompt_eval_count: u64,
-    pub(crate) eval_count: u64,
 }
 
 pub async fn maker_run<B>(
@@ -91,7 +92,7 @@ where
         Filetype::Cmake { .. } => "cmake.toml",
         Filetype::Readme { .. } => "readme.toml",
         Filetype::Docker { .. } => "docker.toml",
-        Filetype::Spec{ .. } => "spec.toml",
+        Filetype::Spec { .. } => "spec.toml",
     });
 
     let spec: TomlSpec = bad_request!(toml::from_slice(
@@ -124,7 +125,16 @@ where
     let res = server_err!(http.send_request(req).await);
     let (parts, body) = res.into_parts();
     let bytes = server_err!(body.collect().await).to_bytes();
-    let OllamaResponse { response, model, created_at, thinking, total_duration, prompt_eval_count, eval_count, .. }: OllamaResponse = server_err!(serde_json::from_slice(&bytes));
+    let OllamaResponse {
+        response,
+        model,
+        created_at,
+        total_duration,
+        prompt_eval_count,
+        eval_count,
+        ..
+    }: OllamaResponse = server_err!(serde_json::from_slice(&bytes));
+
     info!(
     created_at = %created_at,
     model = %model,
@@ -137,9 +147,6 @@ where
 
     Ok(hyper::Response::from_parts(
         parts,
-        BoxBody::new(
-            Full::from(
-                response.into_bytes()
-            )),
+        BoxBody::new(Full::from(response.into_bytes())),
     ))
 }
