@@ -12,10 +12,12 @@ use hyper::{
     header::{CONTENT_TYPE, HOST},
 };
 use hyper_util::rt::TokioIo;
+use tracing::info;
 use std::{convert::Infallible, fmt::Display, path::PathBuf};
 use tokio::net::TcpStream;
 use tower::BoxError;
 
+use serde::Deserialize;
 use crate::service::specification::prompt::{Filetype, ResolvedPrompt, TomlSpec};
 
 type Req<B> = hyper::Request<B>;
@@ -34,6 +36,19 @@ impl AppState {
             specifications,
         }
     }
+}
+
+#[derive(Deserialize, Debug)]
+pub(crate) struct OllamaResponse {
+    pub(crate) response: String,
+    pub(crate) done: bool,
+    pub(crate) model: String,
+    pub(crate) created_at: String,
+    pub(crate) done_reason: String,
+    pub(crate) thinking: String,
+    pub(crate) total_duration: u64,
+    pub(crate) prompt_eval_count: u64,
+    pub(crate) eval_count: u64,
 }
 
 pub async fn maker_run<B>(
@@ -76,6 +91,7 @@ where
         Filetype::Cmake { .. } => "cmake.toml",
         Filetype::Readme { .. } => "readme.toml",
         Filetype::Docker { .. } => "docker.toml",
+        Filetype::Spec{ .. } => "spec.toml",
     });
 
     let spec: TomlSpec = bad_request!(toml::from_slice(
@@ -83,8 +99,9 @@ where
     ));
 
     let mut prompt: ResolvedPrompt = (spec, file_t).try_into()?;
-    prompt.model.get_or_insert("deepseek-v3.2:cloud".into());
 
+    info!("ollama request sent");
+    prompt.model.get_or_insert("deepseek-v3.2:cloud".into());
     let path = ollama_uri.path();
     let req = bad_request!(
         Request::builder()
@@ -107,8 +124,22 @@ where
     let res = server_err!(http.send_request(req).await);
     let (parts, body) = res.into_parts();
     let bytes = server_err!(body.collect().await).to_bytes();
+    let OllamaResponse { response, model, created_at, thinking, total_duration, prompt_eval_count, eval_count, .. }: OllamaResponse = server_err!(serde_json::from_slice(&bytes));
+    info!(
+    created_at = %created_at,
+    model = %model,
+    prompt_size = %prompt_eval_count,
+    eval_count = %eval_count,
+    sec_elapsed= %total_duration/ 1_000_000_000,
+    ms_elapsed= %(total_duration % 1_000_000_000) / 1_000_000,
+    "ollama response received"
+    );
+
     Ok(hyper::Response::from_parts(
         parts,
-        BoxBody::new(Full::from(bytes)),
+        BoxBody::new(
+            Full::from(
+                response.into_bytes()
+            )),
     ))
 }

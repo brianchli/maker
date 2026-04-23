@@ -23,7 +23,6 @@ pub(crate) enum GuardDecision<B> {
 pub(crate) mod policy {
 
     use hyper::body::{Body, Incoming};
-    use tracing::event;
 
     pub const BYPASS: fn(hyper::Request<Incoming>) -> GuardDecision<Incoming> = never;
     pub const ALWAYS: fn(hyper::Request<Incoming>) -> GuardDecision<Incoming> = always;
@@ -130,7 +129,6 @@ pub(crate) mod policy {
         B: hyper::body::Body,
     {
         let (parts, body) = req.into_parts();
-        event!(target:module_path!(),tracing::Level::INFO,"middleware bypassed");
         GuardDecision::Bypass(hyper::Request::from_parts(parts, body))
     }
 
@@ -139,7 +137,6 @@ pub(crate) mod policy {
         B: hyper::body::Body,
     {
         let (parts, body) = req.into_parts();
-        event!(target:module_path!(),tracing::Level::INFO,"middleware executed");
         GuardDecision::Continue(hyper::Request::from_parts(parts, body))
     }
 }

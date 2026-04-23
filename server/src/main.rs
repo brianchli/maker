@@ -8,7 +8,6 @@ use service::maker_run;
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
 use tracing::info;
-use tracing_subscriber::fmt::format::FmtSpan;
 
 use crate::{
     server::{server_init, server_shutdown},
@@ -21,17 +20,18 @@ async fn main() -> Result<(), error::ServerError> {
 
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::INFO)
-        .with_span_events(FmtSpan::ENTER | FmtSpan::CLOSE)
+        .compact()
+        .with_target(false)
         .init();
 
     let svc = TowerToHyperService::new(
         ServiceBuilder::new()
+            .concurrency_limit(1000)
             .layer(tower_http::trace::TraceLayer::new_for_http())
-            .buffer(1024)
-            .concurrency_limit(10)
             .layer(middlewares::HttpResponseLayer::new())
-            .layer(middlewares::RateLimiter::new(10, 10, policy::BYPASS))
             .layer(middlewares::TimeoutLayer::from_mins(5, policy::ALWAYS))
+            .buffer(1024)
+            .layer(middlewares::RateLimiter::new(10, 10, policy::BYPASS))
             .service(tower::service_fn(move |req| {
                 let appstate = state.clone();
                 async move { maker_run(appstate, req).await }
