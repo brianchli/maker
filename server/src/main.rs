@@ -28,9 +28,9 @@ async fn main() -> Result<(), error::ServerError> {
         ServiceBuilder::new()
             .layer(tower_http::trace::TraceLayer::new_for_http())
             .layer(middlewares::HttpResponseLayer::new())
-            .buffer(2000)
+            .buffer(1000)
             .layer(middlewares::RateLimiter::new(10, 10, policy::ALWAYS))
-            .concurrency_limit(2000)
+            .concurrency_limit(20)
             .layer(middlewares::TimeoutLayer::from_mins(3, policy::ALWAYS))
             .service(tower::service_fn(move |req| {
                 let appstate = state.clone();

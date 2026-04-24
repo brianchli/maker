@@ -5,12 +5,7 @@ pub mod middlewares;
 mod specification;
 
 use http_body_util::{BodyExt, Full, combinators::BoxBody};
-use hyper::{
-    Method, Request, StatusCode,
-    body::Bytes,
-    client::conn::http1,
-    header::{CONTENT_TYPE, HOST},
-};
+use hyper::{Method, Request, StatusCode, body::Bytes, client::conn::http1, header::CONTENT_TYPE};
 use hyper_util::rt::TokioIo;
 use std::{convert::Infallible, fmt::Display, path::PathBuf};
 use tokio::net::TcpStream;
@@ -87,7 +82,7 @@ where
         &server_err!(body.collect().await).to_bytes()
     ));
 
-    specifications.push(match file_t {
+    specifications.push(match &file_t {
         Filetype::Make { .. } => "make.toml",
         Filetype::Cmake { .. } => "cmake.toml",
         Filetype::Readme { .. } => "readme.toml",
@@ -95,30 +90,22 @@ where
         Filetype::Spec { .. } => "spec.toml",
     });
 
-    let spec: TomlSpec = bad_request!(toml::from_slice(
+    let spec: TomlSpec = server_err!(toml::from_slice(
         server_err!(tokio::fs::read(&specifications).await).as_slice()
     ));
 
-    let mut prompt = bad_request!(ResolvedPrompt::try_from((spec, file_t)));
+    info!("ollama request for {}", &file_t);
+    let mut prompt = server_err!(ResolvedPrompt::try_from((spec, file_t)));
 
-    info!("ollama request sent");
     prompt.model.get_or_insert("qwen3.5:cloud".into());
     let path = ollama_uri.path();
-    let req = bad_request!(
+    let req = server_err!(
         Request::builder()
             .method(Method::POST)
             .uri(path)
-            .header(
-                HOST,
-                some_or_err!(
-                    ollama_uri.authority(),
-                    "malformed authority for ollama path"
-                )
-                .as_str()
-            )
             .header(CONTENT_TYPE, r#"application/json"#)
             .body(Full::<Bytes>::new(
-                bad_request!(serde_json::to_string(&prompt)).into()
+                server_err!(serde_json::to_string(&prompt)).into()
             ))
     );
 
