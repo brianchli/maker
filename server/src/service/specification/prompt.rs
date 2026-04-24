@@ -28,6 +28,7 @@ pub(crate) struct TaskContext {
 pub(crate) struct TomlSpec {
     model: Option<String>,
     system: Option<System>,
+    think: Option<Boolish>,
     context: TaskContext,
     constraints: Vec<String>,
 }
@@ -56,7 +57,7 @@ impl Display for Filetype {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(untagged)]
-enum ConditionalThink {
+enum Boolish {
     Bool(bool),
     String(String),
 }
@@ -107,7 +108,7 @@ impl TryFrom<(TomlSpec, Filetype)> for ResolvedPrompt {
             model: spec.model,
             prompt,
             stream: false,
-            think: ConditionalThink::Bool(true),
+            think: spec.think.unwrap_or(Boolish::Bool(true)),
             keep_alive: None,
             options: spec.system,
         })
@@ -120,7 +121,7 @@ pub(crate) struct ResolvedPrompt {
     pub(crate) model: Option<String>,
     prompt: String,
     stream: bool,
-    think: ConditionalThink,
+    think: Boolish,
     #[serde(skip_serializing_if = "Option::is_none")]
     keep_alive: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
