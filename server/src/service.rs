@@ -5,7 +5,12 @@ pub mod middlewares;
 mod specification;
 
 use http_body_util::{BodyExt, Full, combinators::BoxBody};
-use hyper::{Method, Request, StatusCode, body::Bytes, client::conn::http1, header::CONTENT_TYPE};
+use hyper::{
+    Method, Request, StatusCode,
+    body::Bytes,
+    client::conn::http1,
+    header::{CONTENT_TYPE, HOST},
+};
 use hyper_util::rt::TokioIo;
 use std::{convert::Infallible, fmt::Display, path::PathBuf};
 use tokio::net::TcpStream;
@@ -103,6 +108,14 @@ where
         Request::builder()
             .method(Method::POST)
             .uri(path)
+            .header(
+                HOST,
+                some_or_err!(
+                    ollama_uri.authority(),
+                    "malformed authority for ollama path"
+                )
+                .as_str()
+            )
             .header(CONTENT_TYPE, r#"application/json"#)
             .body(Full::<Bytes>::new(
                 server_err!(serde_json::to_string(&prompt)).into()
