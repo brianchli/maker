@@ -99,7 +99,7 @@ where
         server_err!(tokio::fs::read(&specifications).await).as_slice()
     ));
 
-    let mut prompt: ResolvedPrompt = (spec, file_t).try_into()?;
+    let mut prompt = bad_request!(ResolvedPrompt::try_from((spec, file_t)));
 
     info!("ollama request sent");
     prompt.model.get_or_insert("deepseek-v3.2:cloud".into());
@@ -122,6 +122,9 @@ where
             ))
     );
 
+
+    dbg!(&req);
+
     let res = server_err!(http.send_request(req).await);
     let (parts, body) = res.into_parts();
     let bytes = server_err!(body.collect().await).to_bytes();
@@ -132,8 +135,11 @@ where
         total_duration,
         prompt_eval_count,
         eval_count,
+        thinking,
         ..
     }: OllamaResponse = server_err!(serde_json::from_slice(&bytes));
+
+    dbg!(&response, &thinking);
 
     info!(
     created_at = %created_at,
@@ -145,8 +151,9 @@ where
     "ollama response received"
     );
 
+    let body: Full<Bytes> = Full::from(response.into_bytes());
     Ok(hyper::Response::from_parts(
         parts,
-        BoxBody::new(Full::from(response.into_bytes())),
+        BoxBody::new(body),
     ))
 }

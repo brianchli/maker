@@ -9,9 +9,14 @@ use tower::BoxError;
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct System {
+    #[serde(skip_serializing_if = "Option::is_none")]
     temperature: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     top_p: Option<f32>,
-    num_predict: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    num_ctx: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    num_predict: Option<u32>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -47,6 +52,13 @@ impl Display for Filetype {
             Filetype::Spec { .. } => write!(f, "Spec"),
         }
     }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+enum ConditionalThink {
+    Bool(bool),
+    String(String),
 }
 
 const SCHEMA: &str = r#";use the following schema: mk=makefile, cm=cmake, dkr=docker, rdme=readme, c=constraints,; constraints are separated with '|';"#;
@@ -95,6 +107,8 @@ impl TryFrom<(TomlSpec, Filetype)> for ResolvedPrompt {
             model: spec.model,
             prompt,
             stream: false,
+            think: ConditionalThink::Bool(true),
+            keep_alive: None,
             options: spec.system,
         })
     }
@@ -106,6 +120,9 @@ pub(crate) struct ResolvedPrompt {
     pub(crate) model: Option<String>,
     prompt: String,
     stream: bool,
+    think: ConditionalThink,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    keep_alive: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     options: Option<Options>,
 }

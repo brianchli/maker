@@ -7,8 +7,9 @@ use std::{
 
 use futures_util::StreamExt;
 use http_body_util::{BodyExt, Full, StreamBody, combinators::BoxBody};
-use hyper::body::Bytes;
+use hyper::{body::Bytes, header::HOST};
 use pin_project_lite::pin_project;
+use tracing::info;
 
 pub struct HttpErrResponseLayer {}
 #[derive(Clone)]
@@ -31,10 +32,10 @@ impl<S> tower::Layer<S> for HttpErrResponseLayer {
 }
 
 pin_project! {
-#[derive(Debug)]
-pub struct HttpErrFuture<F> {
-    #[pin]
-    response: F,
+    #[derive(Debug)]
+    pub struct HttpErrFuture<F> {
+        #[pin]
+        response: F,
     }
 }
 
@@ -95,6 +96,14 @@ where
     }
 
     fn call(&mut self, req: Req<B1>) -> Self::Future {
-        HttpErrFuture::new(self.inner.call(req))
+        let (parts, body) = req.into_parts();
+
+        if let Some(host) = parts.headers.get(HOST) {
+            if let Ok(host) = host.to_str() {
+                info!("Incoming request from [{}]", host);
+            };
+        };
+
+        HttpErrFuture::new(self.inner.call(hyper::Request::from_parts(parts, body)))
     }
 }
