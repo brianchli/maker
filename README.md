@@ -24,6 +24,7 @@ Built for speed and modularity, `maker` leverages the following core technologie
 - **hyper**: For low-level HTTP functionality where remote prompts are utilized.
 - **tower**: For composable async services and middleware management.
 - **serde**: For robust serialization and deserialization of the TOML specifications.
+- **tokio**: For asychronous task coordination.
 
 ## Usage
 
