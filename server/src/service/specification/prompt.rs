@@ -3,9 +3,30 @@
 
 use std::fmt::Write;
 
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize, Deserializer, Serialize,
+    de::{Error, Visitor},
+};
 use std::fmt::Display;
 use tower::BoxError;
+
+#[derive(Serialize, Deserialize)]
+pub(crate) struct TomlSpec {
+    model: Option<String>,
+    system: Option<System>,
+    think: Option<Boolish>,
+    context: TaskContext,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(tag = "filetype", rename_all = "lowercase")]
+pub(crate) enum Filetype {
+    Make { content: String },
+    Cmake { content: String },
+    Readme { content: String },
+    Docker { content: String },
+    Spec { content: String },
+}
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct System {
@@ -21,26 +42,70 @@ pub(crate) struct System {
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct TaskContext {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    system_prompt: Option<String>,
     prompt: String,
-}
-
-#[derive(Serialize, Deserialize)]
-pub(crate) struct TomlSpec {
-    model: Option<String>,
-    system: Option<System>,
-    think: Option<Boolish>,
-    context: TaskContext,
     constraints: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize)]
-#[serde(tag = "filetype", rename_all = "lowercase")]
-pub(crate) enum Filetype {
-    Make { content: String },
-    Cmake { content: String },
-    Readme { content: String },
-    Docker { content: String },
-    Spec { content: String },
+type Options = System;
+#[derive(Deserialize, Serialize)]
+pub(crate) struct ResolvedPrompt {
+    pub(crate) model: Option<String>,
+    prompt: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    system_prompt: Option<String>,
+    stream: bool,
+    #[serde(deserialize_with = "deserialize_boolish")]
+    think: Boolish,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    keep_alive: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    options: Option<Options>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(untagged)]
+enum Boolish {
+    Bool(bool),
+    String(String),
+}
+
+impl<'de> Deserialize<'de> for Boolish {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        deserializer.deserialize_str(BoolishVisitor {})
+    }
+}
+
+struct BoolishVisitor {}
+impl<'de> Visitor<'de> for BoolishVisitor {
+    type Value = Boolish;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(formatter, r#""true", "false", "low", "medium" or "high""#)
+    }
+
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+    where
+        E: Error,
+    {
+        match v {
+            "true" => Ok(Boolish::Bool(true)),
+            "false" => Ok(Boolish::Bool(false)),
+            "low" | "medium" | "high" => Ok(Boolish::String(v.to_string())),
+            other => Err(Error::unknown_variant(
+                other,
+                &["true", "false", "low", "medium", "high"],
+            )),
+        }
+    }
+}
+
+fn deserialize_boolish<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Boolish, D::Error> {
+    deserializer.deserialize_string(BoolishVisitor {})
 }
 
 impl Display for Filetype {
@@ -53,13 +118,6 @@ impl Display for Filetype {
             Filetype::Spec { .. } => write!(f, "Spec"),
         }
     }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(untagged)]
-enum Boolish {
-    Bool(bool),
-    String(String),
 }
 
 const SCHEMA: &str = r#";use the following schema: mk=makefile, cm=cmake, dkr=docker, rdme=readme, c=constraints,; constraints are separated with '|';"#;
@@ -99,13 +157,14 @@ impl TryFrom<(TomlSpec, Filetype)> for ResolvedPrompt {
             )?,
         };
 
-        if !spec.constraints.is_empty() {
+        if !spec.context.constraints.is_empty() {
             prompt.push_str(" c:");
-            prompt.push_str(&spec.constraints.join("|"));
+            prompt.push_str(&spec.context.constraints.join("|"));
         };
 
         Ok(Self {
             model: spec.model,
+            system_prompt: spec.context.system_prompt,
             prompt,
             stream: false,
             think: spec.think.unwrap_or(Boolish::Bool(true)),
@@ -113,17 +172,4 @@ impl TryFrom<(TomlSpec, Filetype)> for ResolvedPrompt {
             options: spec.system,
         })
     }
-}
-
-type Options = System;
-#[derive(Deserialize, Serialize)]
-pub(crate) struct ResolvedPrompt {
-    pub(crate) model: Option<String>,
-    prompt: String,
-    stream: bool,
-    think: Boolish,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    keep_alive: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    options: Option<Options>,
 }
