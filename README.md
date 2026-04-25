@@ -5,7 +5,6 @@
   - [Description](#description)
   - [Usage](#usage)
     - [Configuration Example](#configuration-example)
-  - [License](#license)
 <!--toc:end-->
 
 ![Rust](https://img.shields.io/badge/rust-1.70+-orange.svg)
