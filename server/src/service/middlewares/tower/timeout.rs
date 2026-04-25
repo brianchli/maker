@@ -1,59 +1,69 @@
 use std::time::Duration;
 
-use hyper::body::Incoming;
+use hyper::{
+    body::Incoming,
+    header::{HOST, HeaderValue},
+};
 use tower::timeout::Timeout;
 use tracing::Span;
 
 use crate::service::{
     Req,
-    middlewares::tower::conditional_impl::{ConditionalService, ConditionalServiceLayer},
+    middlewares::{PredicateFn, tower::conditional_impl::ConditionalService},
 };
 
-pub struct TimeoutLayer<F> {
+pub struct TimeoutLayer {
     duration: Duration,
-    layer: ConditionalServiceLayer<F>,
+    f: PredicateFn<Incoming>,
 }
 
-impl<F> TimeoutLayer<F>
-where
-    F: Clone,
-{
-    pub fn from_secs(seconds: u64, f: F) -> Self {
+impl TimeoutLayer {
+    pub fn from_secs(seconds: u64, f: PredicateFn<Incoming>) -> Self {
         Self {
             duration: Duration::from_secs(seconds),
-            layer: ConditionalServiceLayer::new(f),
+            f,
         }
     }
 
-    pub fn from_mins(minutes: u64, f: F) -> Self {
+    pub fn from_mins(minutes: u64, f: PredicateFn<Incoming>) -> Self {
         Self {
             duration: Duration::from_mins(minutes),
-            layer: ConditionalServiceLayer::new(f),
+            f,
         }
     }
 }
 
+const EMPTY_HOST: &str = "";
 type TimeoutService<S, S1, F, F1> = ConditionalService<S, S1, F, F1>;
-impl<S, F> tower::Layer<S> for TimeoutLayer<F>
+impl<S> tower::Layer<S> for TimeoutLayer
 where
     S: Clone,
-    F: Clone,
 {
-    type Service = TimeoutService<S, tower::timeout::Timeout<S>, F, fn(&Req<Incoming>) -> Span>;
+    type Service = TimeoutService<
+        S,
+        tower::timeout::Timeout<S>,
+        PredicateFn<Incoming>,
+        fn(&Req<Incoming>) -> Span,
+    >;
 
     fn layer(&self, inner: S) -> Self::Service {
         let other = inner.clone();
 
         fn timeout_span<B>(req: &Req<B>) -> Span {
+            let empty_header = HeaderValue::from_static(EMPTY_HOST);
+            let host = req.headers().get(HOST).unwrap_or(&empty_header);
             tracing::info_span!(
                 "timeout",
-                path = %req.uri().path()
+                path = %req.uri().path(),
+                host = %host.to_str().unwrap_or(EMPTY_HOST),
+                method = %req.method().as_str(),
             )
         }
         Self::Service::new(
+            "timeout",
             inner,
             Timeout::new(other, self.duration),
-            self.layer.func().clone(),
+            self.f.clone(),
             timeout_span,
         )
     }

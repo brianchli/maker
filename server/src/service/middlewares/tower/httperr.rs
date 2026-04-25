@@ -97,19 +97,28 @@ where
 
     fn call(&mut self, req: Req<B1>) -> Self::Future {
         let (parts, body) = req.into_parts();
+        let span = tracing::info_span!(
+            "http",
+            path = %parts.uri.path().to_string(),
+            method = %parts.method.as_str(),
+        );
 
         if let (Some(ip), Some(host)) = (
             parts.headers.get("cf-connecting-ip"),
             parts.headers.get(HOST),
         ) {
             if let (Ok(ip), Ok(host)) = (ip.to_str(), host.to_str()) {
-                info!("Incoming external request from [{}] for [{}] ", ip, host);
+                span.in_scope(|| {
+                    info!(ip = %ip, host = %host, "Incoming external request");
+                })
             }
         } else if let (Some(ip), Some(host)) =
             (parts.headers.get("x-real-ip"), parts.headers.get(HOST))
         {
             if let (Ok(ip), Ok(host)) = (ip.to_str(), host.to_str()) {
-                info!("Incoming internal request from [{}] for [{}] ", ip, host);
+                span.in_scope(|| {
+                    info!(ip = %ip, host = %host, "Incoming internal request");
+                })
             }
         };
 

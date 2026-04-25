@@ -1,35 +1,42 @@
-use std::task::Poll::{Pending, Ready};
+use std::{
+    fmt::{Debug, Display},
+    sync::Arc,
+    task::Poll::{Pending, Ready},
+};
 
 use futures_util::future::Either;
 use hyper::body::Body;
 use tower::{BoxError, Service};
-use tracing::{Instrument, Span, event, instrument::Instrumented};
+use tracing::{Instrument, Span, event, info, instrument::Instrumented};
 
 use crate::service::{
     Req,
-    middlewares::GuardDecision::{self, Bypass, Continue},
+    middlewares::{
+        GuardDecision::{Bypass, Continue},
+        PredicateFn,
+    },
 };
 
 #[derive(Clone)]
 pub struct ConditionalServiceLayer<F> {
-    predicate: F,
+    predicate: Arc<F>,
 }
 
-impl<F> ConditionalServiceLayer<F>
-where
-    F: Clone,
-{
+impl<F> ConditionalServiceLayer<F> {
     pub fn new(f: F) -> Self {
-        Self { predicate: f }
+        Self {
+            predicate: Arc::new(f),
+        }
     }
 
-    pub fn func(&self) -> F {
+    pub fn func(&self) -> Arc<F> {
         self.predicate.clone()
     }
 }
 
 #[derive(Clone)]
 pub struct ConditionalService<S1, S2, F, F1> {
+    name: &'static str,
     service_1: S1,
     service_2: S2,
     predicate: F,
@@ -37,8 +44,15 @@ pub struct ConditionalService<S1, S2, F, F1> {
 }
 
 impl<S1, S2, F, F1> ConditionalService<S1, S2, F, F1> {
-    pub fn new(service_1: S1, service_2: S2, predicate: F, span_generator: F1) -> Self {
+    pub fn new(
+        name: &'static str,
+        service_1: S1,
+        service_2: S2,
+        predicate: F,
+        span_generator: F1,
+    ) -> Self {
         Self {
+            name,
             service_1,
             service_2,
             predicate,
@@ -47,20 +61,24 @@ impl<S1, S2, F, F1> ConditionalService<S1, S2, F, F1> {
     }
 }
 
-type TracedFuture<T> = Instrumented<T>;
+impl<S1, S2, F, F1> Display for ConditionalService<S1, S2, F, F1> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name)
+    }
+}
 
-impl<S1, S2, B, B1, F, F1> Service<Req<B>> for ConditionalService<S1, S2, F, F1>
+type TracedFuture<T> = Instrumented<T>;
+impl<S1, S2, B, B1, F1> Service<Req<B>> for ConditionalService<S1, S2, PredicateFn<B>, F1>
 where
     B: Body,
     B1: Body,
     S1: Service<Req<B>, Response = hyper::Response<B1>>,
     S2: Service<Req<B>, Response = hyper::Response<B1>>,
-    S1::Error: Into<BoxError>,
-    S2::Error: Into<BoxError>,
+    S1::Error: Into<BoxError> + Debug,
+    S2::Error: Into<BoxError> + Debug,
     S1::Future: Future<Output = Result<hyper::Response<B1>, BoxError>>,
     S2::Future: Future<Output = Result<hyper::Response<B1>, BoxError>>,
     F1: Fn(&Req<B>) -> Span,
-    F: Fn(Req<B>) -> GuardDecision<B>,
 {
     type Response = hyper::Response<B1>;
     type Error = BoxError;
@@ -72,10 +90,12 @@ where
     ) -> std::task::Poll<Result<(), Self::Error>> {
         let a = self.service_1.poll_ready(cx);
         if let Ready(Err(e)) = a {
+            info!("{} error: {:?}", self, e);
             return Ready(Err(e.into()));
         };
         let b = self.service_2.poll_ready(cx);
         if let Ready(Err(e)) = b {
+            info!("{} error: {:?}", self, e);
             return Ready(Err(e.into()));
         };
         event!(target:module_path!(),tracing::Level::DEBUG,"poll ready");

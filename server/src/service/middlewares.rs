@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 mod tower;
+use std::sync::Arc;
+
 pub use tower::HttpResponseLayer;
 pub use tower::RateLimiter;
 pub use tower::TimeoutLayer;
@@ -7,15 +9,16 @@ pub use tower::TimeoutLayer;
 use crate::service::AppState;
 use crate::service::Req;
 
-type PredicateFn<B> = fn(Req<B>) -> (bool, Req<B>);
-type PredicateFnWithState<B> = fn(AppState, Req<B>) -> (bool, Req<B>);
+type PredicateBuilderFn<B> = fn(Req<B>) -> (bool, Req<B>);
+type PredicateBuilderFnWithState<B> = fn(AppState, Req<B>) -> (bool, Req<B>);
+pub(crate) type PredicateFn<B> = Arc<dyn Fn(Req<B>) -> GuardDecision<B> + Send + Sync + 'static>;
 
 pub(crate) enum Predicate<B> {
-    Stateless(PredicateFn<B>),
-    Stateful(PredicateFnWithState<B>),
+    Stateless(PredicateBuilderFn<B>),
+    Stateful(PredicateBuilderFnWithState<B>),
 }
 
-pub(crate) enum GuardDecision<B> {
+pub enum GuardDecision<B> {
     Continue(Req<B>),
     Bypass(Req<B>),
 }
@@ -23,18 +26,30 @@ pub(crate) enum GuardDecision<B> {
 pub(crate) mod policy {
 
     use hyper::body::{Body, Incoming};
+    use std::sync::Arc;
 
-    pub const BYPASS: fn(hyper::Request<Incoming>) -> GuardDecision<Incoming> = never;
-    pub const ALWAYS: fn(hyper::Request<Incoming>) -> GuardDecision<Incoming> = always;
+    #[allow(non_snake_case)]
+    pub fn ALWAYS() -> Arc<dyn Fn(hyper::Request<Incoming>) -> GuardDecision<Incoming> + Send + Sync>
+    {
+        Arc::new(always)
+    }
+
+    #[allow(non_snake_case)]
+    pub fn BYPASS() -> Arc<dyn Fn(hyper::Request<Incoming>) -> GuardDecision<Incoming> + Send + Sync>
+    {
+        Arc::new(never)
+    }
 
     use crate::service::{
         AppState, Req,
-        middlewares::{GuardDecision, Predicate, PredicateFn, PredicateFnWithState},
+        middlewares::{GuardDecision, Predicate, PredicateBuilderFn, PredicateBuilderFnWithState},
     };
+
+    use super::PredicateFn;
 
     impl<B> From<(Option<AppState>, Predicate<B>)> for MiddlewareGuardBuilder<B>
     where
-        B: Body,
+        B: Body + 'static,
     {
         fn from(value: (Option<AppState>, Predicate<B>)) -> Self {
             Self::new(value.0, value.1)
@@ -57,7 +72,7 @@ pub(crate) mod policy {
 
     impl<B> MiddlewareGuardBuilder<B>
     where
-        B: Body,
+        B: Body + 'static,
     {
         pub(crate) fn new(state: Option<AppState>, pred: Predicate<B>) -> Self {
             Self { state, pred }
@@ -70,34 +85,29 @@ pub(crate) mod policy {
             }
         }
 
-        pub(crate) fn predicate(self, pred: PredicateFn<B>) -> Self {
-            Self {
-                pred: Predicate::Stateless(pred),
-                ..self
-            }
+        pub(crate) fn predicate(self, pred: Predicate<B>) -> Self {
+            Self { pred, ..self }
         }
 
-        pub(crate) fn generate(self) -> Result<impl FnMut(Req<B>) -> GuardDecision<B>, String> {
+        pub(crate) fn generate(self) -> Result<PredicateFn<B>, String> {
             let (mut state, pred) = self.into();
             if let Predicate::Stateful(_) = pred
                 && state.is_none()
             {
                 return Err("Stateful predicate requires AppState".into());
             };
+            let s = state
+                .take()
+                .expect("Stateful predicate without an AppState");
 
-            Ok(move |req| match pred {
+            Ok(Arc::new(move |req| match pred {
                 Predicate::Stateless(f) => (custom_fn(f))(req),
-                Predicate::Stateful(f) => (custom_fn_with_state(
-                    state
-                        .take()
-                        .expect("Stateful predicate without an AppState"),
-                    f,
-                ))(req),
-            })
+                Predicate::Stateful(f) => (custom_fn_with_state(s.clone(), f))(req),
+            }))
         }
     }
 
-    pub(crate) fn custom_fn<B>(pred: PredicateFn<B>) -> impl Fn(Req<B>) -> GuardDecision<B>
+    pub(crate) fn custom_fn<B>(pred: PredicateBuilderFn<B>) -> impl Fn(Req<B>) -> GuardDecision<B>
     where
         B: hyper::body::Body,
     {
@@ -111,7 +121,7 @@ pub(crate) mod policy {
 
     pub(crate) fn custom_fn_with_state<B>(
         state: AppState,
-        pred: PredicateFnWithState<B>,
+        pred: PredicateBuilderFnWithState<B>,
     ) -> impl Fn(Req<B>) -> GuardDecision<B>
     where
         B: hyper::body::Body,

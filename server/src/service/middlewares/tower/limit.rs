@@ -4,37 +4,34 @@ use hyper::body::Incoming;
 use tower::limit::{RateLimit, rate::Rate};
 use tracing::Span;
 
-use crate::service::Req;
+use crate::service::{Req, middlewares::PredicateFn};
 
-use super::conditional_impl::{ConditionalService, ConditionalServiceLayer};
+use super::conditional_impl::ConditionalService;
 
 #[derive(Clone)]
-pub struct RateLimiter<F> {
+pub struct RateLimiter {
     requests: u64,
     duration: Duration,
-    layer: ConditionalServiceLayer<F>,
+    f: PredicateFn<Incoming>,
 }
 
-impl<F: Clone> RateLimiter<F>
-where
-    F: Clone,
-{
-    pub fn new(requests: u64, seconds: u64, f: F) -> Self {
+impl RateLimiter {
+    pub fn new(requests: u64, seconds: u64, f: PredicateFn<Incoming>) -> Self {
         Self {
             requests,
             duration: Duration::from_secs(seconds),
-            layer: ConditionalServiceLayer::new(f),
+            f,
         }
     }
 }
 
 type RateLimitService<S, S1, F, F1> = ConditionalService<S, S1, F, F1>;
-impl<S, F> tower::Layer<S> for RateLimiter<F>
+impl<S> tower::Layer<S> for RateLimiter
 where
     S: Clone,
-    F: Clone,
 {
-    type Service = RateLimitService<S, RateLimit<S>, F, fn(&Req<Incoming>) -> Span>;
+    type Service =
+        RateLimitService<S, RateLimit<S>, PredicateFn<Incoming>, fn(&Req<Incoming>) -> Span>;
 
     fn layer(&self, inner: S) -> Self::Service {
         let other = inner.clone();
@@ -44,9 +41,10 @@ where
         }
 
         Self::Service::new(
+            "ratelimit",
             inner,
             RateLimit::new(other, Rate::new(self.requests, self.duration)),
-            self.layer.func().clone(),
+            self.f.clone(),
             ratelimit_span,
         )
     }

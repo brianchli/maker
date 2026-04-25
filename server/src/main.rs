@@ -2,6 +2,7 @@ mod error;
 mod server;
 mod service;
 
+use crate::middlewares::policy;
 use hyper::server::conn::http1;
 use hyper_util::{rt::TokioIo, service::TowerToHyperService};
 use service::maker_run;
@@ -11,7 +12,7 @@ use tracing::info;
 
 use crate::{
     server::{server_init, server_shutdown},
-    service::middlewares::{self, policy},
+    service::middlewares::{self},
 };
 
 #[tokio::main]
@@ -28,10 +29,10 @@ async fn main() -> Result<(), error::ServerError> {
         ServiceBuilder::new()
             .layer(tower_http::trace::TraceLayer::new_for_http())
             .layer(middlewares::HttpResponseLayer::new())
-            .buffer(1000)
-            .layer(middlewares::RateLimiter::new(10, 10, policy::ALWAYS))
+            .buffer(1024)
             .concurrency_limit(20)
-            .layer(middlewares::TimeoutLayer::from_mins(3, policy::ALWAYS))
+            .layer(middlewares::RateLimiter::new(10, 10, policy::ALWAYS()))
+            .layer(middlewares::TimeoutLayer::from_mins(3, policy::ALWAYS()))
             .service(tower::service_fn(move |req| {
                 let appstate = state.clone();
                 async move { maker_run(appstate, req).await }
