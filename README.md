@@ -1,15 +1,17 @@
 # maker
 
-<!--toc:start-->
-- [maker](#maker)
-  - [Description](#description)
-  - [Usage](#usage)
-    - [Configuration Example](#configuration-example)
-<!--toc:end-->
-
 ![Rust](https://img.shields.io/badge/rust-1.70+-orange.svg)
 ![Status](https://img.shields.io/badge/status-beta-yellow.svg)
 ![License](https://img.shields.io/badge/license-Proprietary-red.svg)
+
+> A high-performance Rust web server for specification-driven file templating
+> via Ollama.
+
+## Table of Contents
+
+- [Description](#description)
+- [Usage](#usage)
+  - [Configuration Example](#configuration-example)
 
 ## Description
 
