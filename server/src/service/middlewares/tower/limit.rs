@@ -39,10 +39,8 @@ where
     fn layer(&self, inner: S) -> Self::Service {
         let other = inner.clone();
 
-        fn ratelimit_span<B>(req: &Req<B>) -> Span {
-            tracing::info_span!(
-            "rate_limit",
-            path = %req.uri().path())
+        fn ratelimit_span<B>(_req: &Req<B>) -> Span {
+            Span::current()
         }
 
         Self::Service::new(

@@ -1,3 +1,6 @@
+#[macro_use]
+mod macros;
+mod http;
 pub mod middlewares;
 mod specification;
 
@@ -9,99 +12,57 @@ use hyper::{
     header::{CONTENT_TYPE, HOST},
 };
 use hyper_util::rt::TokioIo;
-use std::convert::Infallible;
+use std::{convert::Infallible, fmt::Display, path::PathBuf};
 use tokio::net::TcpStream;
 use tower::BoxError;
-use tracing::error;
+use tracing::{event, info};
+
+use crate::service::specification::prompt::{Filetype, ResolvedPrompt, TomlSpec};
+use serde::Deserialize;
 
 type Req<B> = hyper::Request<B>;
 type Response = hyper::Response<BoxBody<Bytes, Infallible>>;
 
-#[macro_use]
-pub(crate) mod macros {
-
-    #[macro_export]
-    macro_rules! ok_or_http_response {
-        ($expr:expr, $status:expr) => {
-            match $expr {
-                Ok(ok) => ok,
-                Err(e) => {
-                    error!("[{}] {}", $status, e);
-                    return Ok($crate::service::http::error_response($status));
-                }
-            }
-        };
-    }
-
-    #[macro_export]
-    macro_rules! some_or_http_response {
-        ($expr:expr, $reason:literal, $status:expr) => {
-            match $expr {
-                Some(ok) => ok,
-                None => {
-                    error!("[{}] {}", $status, $reason);
-                    return Ok($crate::service::http::error_response($status));
-                }
-            }
-        };
-    }
-
-    #[macro_export]
-    macro_rules! some_or_err {
-        ($expr:expr, $reason:literal) => {
-            some_or_http_response!($expr, $reason, StatusCode::INTERNAL_SERVER_ERROR)
-        };
-    }
-
-    #[macro_export]
-    macro_rules! server_err {
-        ($expr:expr) => {
-            ok_or_http_response!($expr, StatusCode::INTERNAL_SERVER_ERROR)
-        };
-    }
-
-    #[macro_export]
-    macro_rules! bad_request {
-        ($expr:expr) => {
-            ok_or_http_response!($expr, StatusCode::BAD_REQUEST)
-        };
-    }
-}
-
-pub(crate) mod http {
-
-    use super::Response as ServerResponse;
-    use http_body_util::{BodyExt, Empty};
-    use hyper::Response;
-    use hyper::body::Bytes;
-    use hyper::http::StatusCode;
-
-    pub(crate) fn error_response(status_code: StatusCode) -> ServerResponse {
-        let mut resp = Response::new(
-            Empty::<Bytes>::new()
-                .map_err(|never| match never {})
-                .boxed(),
-        );
-        *resp.status_mut() = status_code;
-        resp
-    }
+#[allow(dead_code)]
+#[derive(Deserialize, Debug)]
+pub(crate) struct OllamaResponse {
+    pub(crate) response: String,
+    pub(crate) done: bool,
+    pub(crate) model: String,
+    pub(crate) created_at: String,
+    pub(crate) done_reason: String,
+    pub(crate) thinking: Option<String>,
+    pub(crate) total_duration: u64,
+    pub(crate) prompt_eval_count: u64,
+    pub(crate) eval_count: u64,
 }
 
 #[derive(Clone, Debug)]
 pub(crate) struct AppState {
     ollama_uri: hyper::Uri,
+    specifications: PathBuf,
 }
 
 impl AppState {
-    pub(crate) fn new(ollama_uri: hyper::Uri) -> Self {
-        Self { ollama_uri }
+    pub(crate) fn new(ollama_uri: hyper::Uri, specifications: PathBuf) -> Self {
+        Self {
+            ollama_uri,
+            specifications,
+        }
     }
 }
 
 pub async fn maker_run<B>(
-    AppState { ollama_uri }: AppState,
-    _req: Req<B>,
-) -> Result<Response, BoxError> {
+    AppState {
+        ollama_uri,
+        mut specifications,
+    }: AppState,
+    req: Req<B>,
+) -> Result<Response, BoxError>
+where
+    B: hyper::body::Body,
+    B::Error: Display,
+{
     let stream = server_err!(
         TcpStream::connect(format!(
             "{}:{}",
@@ -112,25 +73,36 @@ pub async fn maker_run<B>(
     );
 
     let io = TokioIo::new(stream);
-    let (mut send, conn) = server_err!(http1::handshake(io).await);
+    let (mut http, conn) = server_err!(http1::handshake(io).await);
 
     tokio::task::spawn(async move {
-        let res = server_err!(
+        Ok::<_, BoxError>(server_err!(
             conn.await
                 .map(|_| http::error_response(StatusCode::INTERNAL_SERVER_ERROR))
-        );
-        Ok::<_, BoxError>(res)
+        ))
     });
 
-    // TOOO - replace this with serialisation of a specification
-    let json = r#"
-    {
-        "model": "deepseek-v3.2:cloud",
-        "prompt": "Why is the sky blue?",
-        "stream": false
-    }
-    "#;
+    let (_parts, body) = req.into_parts();
+    let file_t: Filetype = bad_request!(serde_json::from_slice(
+        &server_err!(body.collect().await).to_bytes()
+    ));
 
+    specifications.push(match &file_t {
+        Filetype::Make { .. } => "make.toml",
+        Filetype::Cmake { .. } => "cmake.toml",
+        Filetype::Readme { .. } => "readme.toml",
+        Filetype::Docker { .. } => "docker.toml",
+        Filetype::Spec { .. } => "spec.toml",
+    });
+
+    let spec: TomlSpec = server_err!(toml::from_slice(
+        server_err!(tokio::fs::read(&specifications).await).as_slice()
+    ));
+
+    info!("ollama request for {}", &file_t);
+    let mut prompt = server_err!(ResolvedPrompt::try_from((spec, file_t)));
+    event!(target:module_path!(),tracing::Level::DEBUG,"{:?}", &prompt);
+    prompt.model.get_or_insert("qwen3.5:cloud".into());
     let path = ollama_uri.path();
     let req = server_err!(
         Request::builder()
@@ -145,14 +117,34 @@ pub async fn maker_run<B>(
                 .as_str()
             )
             .header(CONTENT_TYPE, r#"application/json"#)
-            .body(Full::<Bytes>::new(json.into()))
+            .body(Full::<Bytes>::new(
+                server_err!(serde_json::to_string(&prompt)).into()
+            ))
     );
 
-    let res = server_err!(send.send_request(req).await);
+    let res = server_err!(http.send_request(req).await);
     let (parts, body) = res.into_parts();
     let bytes = server_err!(body.collect().await).to_bytes();
-    Ok(hyper::Response::from_parts(
-        parts,
-        BoxBody::new(Full::from(bytes)),
-    ))
+    let OllamaResponse {
+        response,
+        model,
+        created_at,
+        total_duration,
+        prompt_eval_count,
+        eval_count,
+        ..
+    }: OllamaResponse = server_err!(serde_json::from_slice(&bytes));
+
+    info!(
+    created_at = %created_at,
+    model = %model,
+    prompt_size = %prompt_eval_count,
+    eval_count = %eval_count,
+    sec_elapsed= %total_duration/ 1_000_000_000,
+    ms_elapsed= %(total_duration % 1_000_000_000) / 1_000_000,
+    "ollama response received"
+    );
+
+    let body: Full<Bytes> = Full::from(response.into_bytes());
+    Ok(hyper::Response::from_parts(parts, BoxBody::new(body)))
 }

@@ -1,13 +1,13 @@
-FROM rust:slim-bullseye AS build
-
+FROM rust:slim-bullseye AS chef
+RUN cargo install cargo-chef
 RUN rustup target add x86_64-unknown-linux-musl && \
-    apt update && \
-    apt install -y musl-tools musl-dev && \
-    update-ca-certificates
+    apt update && apt install -y musl-tools musl-dev && update-ca-certificates
 
-COPY ./src ./src
-COPY ./Cargo.toml .
+FROM chef AS planner
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
 
+FROM chef AS build
 RUN adduser \
     --disabled-password \
     --gecos "" \
@@ -17,17 +17,23 @@ RUN adduser \
     --uid 1001 \
     "web"
 
-RUN cargo build --release
+COPY --from=planner /recipe.json recipe.json
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/target \
+    cargo chef cook --release --recipe-path recipe.json
+
+COPY ./src ./src
+COPY ./Cargo.toml ./Cargo.lock ./
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/target \
+    cargo build --release && \
+    cp /target/release/server /server
 
 FROM rust:slim-bullseye
 
-# necessary to copy user information into new instance
 COPY --from=build /etc/passwd /etc/passwd
 COPY --from=build /etc/group /etc/group
-
 USER web:web
-
-COPY --from=build --chown=web:web ./target/release/server /app/server
-
+COPY --from=build --chown=web:web /server /app/server
 EXPOSE ${BACKEND_PORT}
 ENTRYPOINT ["./app/server"]
