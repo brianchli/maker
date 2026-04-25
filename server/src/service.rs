@@ -15,7 +15,7 @@ use hyper_util::rt::TokioIo;
 use std::{convert::Infallible, fmt::Display, path::PathBuf};
 use tokio::net::TcpStream;
 use tower::BoxError;
-use tracing::info;
+use tracing::{event, info};
 
 use crate::service::specification::prompt::{Filetype, ResolvedPrompt, TomlSpec};
 use serde::Deserialize;
@@ -101,7 +101,7 @@ where
 
     info!("ollama request for {}", &file_t);
     let mut prompt = server_err!(ResolvedPrompt::try_from((spec, file_t)));
-
+    event!(target:module_path!(),tracing::Level::DEBUG,"{:?}", &prompt);
     prompt.model.get_or_insert("qwen3.5:cloud".into());
     let path = ollama_uri.path();
     let req = server_err!(

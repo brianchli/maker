@@ -28,7 +28,7 @@ pub(crate) enum Filetype {
     Spec { content: String },
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct System {
     #[serde(skip_serializing_if = "Option::is_none")]
     temperature: Option<f32>,
@@ -49,7 +49,7 @@ pub(crate) struct TaskContext {
 }
 
 type Options = System;
-#[derive(Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub(crate) struct ResolvedPrompt {
     pub(crate) model: Option<String>,
     prompt: String,
