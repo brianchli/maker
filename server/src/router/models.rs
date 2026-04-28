@@ -29,7 +29,15 @@ where
     B: Body,
     B::Error: Display,
 {
-    let stream = server_err!(TcpStream::connect(ollama_uri.to_string()).await);
+    let stream = server_err!(
+        TcpStream::connect(format!(
+            "{}:{}",
+            some_or_err!(ollama_uri.host(), "missing uri host"),
+            some_or_err!(ollama_uri.port(), "missing uri port"),
+        ))
+        .await
+    );
+
 
     let io = TokioIo::new(stream);
     let (mut http, conn) = server_err!(http1::handshake(io).await);
