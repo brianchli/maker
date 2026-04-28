@@ -3,10 +3,7 @@
 
 use std::fmt::Write;
 
-use serde::{
-    Deserialize, Deserializer, Serialize,
-    de::{Error, Visitor},
-};
+use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use tower::BoxError;
 
@@ -64,6 +61,7 @@ pub struct ResolvedPrompt {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
 enum Boolish {
     Low,
     Medium,
