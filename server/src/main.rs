@@ -28,11 +28,11 @@ async fn main() -> Result<(), error::ServerError> {
     let svc = TowerToHyperService::new(
         ServiceBuilder::new()
             .layer(tower_http::trace::TraceLayer::new_for_http())
-            .layer(middlewares::HttpResponseLayer::new())
-            .buffer(1024)
-            .concurrency_limit(20)
+            .buffer(256)
+            .layer(middlewares::HttpErrResolver::new())
             .layer(middlewares::RateLimiter::new(10, 10, policy::ALWAYS()))
             .layer(middlewares::TimeoutLayer::from_mins(3, policy::ALWAYS()))
+            .concurrency_limit(50)
             .service(tower::service_fn(move |req| {
                 let appstate = state.clone();
                 async move { maker_run(appstate, req).await }

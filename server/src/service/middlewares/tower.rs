@@ -3,6 +3,6 @@ mod httperr;
 mod limit;
 mod timeout;
 
-pub use httperr::HttpErrResponseLayer as HttpResponseLayer;
+pub use httperr::HttpErrResponseLayer as HttpErrResolver;
 pub use limit::RateLimiter;
 pub use timeout::TimeoutLayer;

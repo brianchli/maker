@@ -2,7 +2,7 @@
 mod tower;
 use std::sync::Arc;
 
-pub use tower::HttpResponseLayer;
+pub use tower::HttpErrResolver;
 pub use tower::RateLimiter;
 pub use tower::TimeoutLayer;
 
