@@ -20,7 +20,7 @@ pub fn server_init() -> Result<(AppState, SocketAddr), error::ServerError> {
     }
 
     let state = AppState::new(
-        format!("http://ollama:{}/api/generate", ollama_port)
+        format!("http://ollama:{}", ollama_port)
             .parse()
             .map_err(|_| error::ServerError::new("Unable to parse ollama uri".into()))?,
         specifications,

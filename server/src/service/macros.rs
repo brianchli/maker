@@ -5,7 +5,7 @@ macro_rules! ok_or_http_response {
             Ok(ok) => ok,
             Err(e) => {
                 ::tracing::error!("[{}] {}", $status, e);
-                return Ok($crate::service::http::error_response($status));
+                return Ok($crate::service::error_response($status));
             }
         }
     };
@@ -18,7 +18,7 @@ macro_rules! some_or_http_response {
             Some(ok) => ok,
             None => {
                 ::tracing::error!("[{}] {}", $status, $reason);
-                return Ok($crate::service::http::error_response($status));
+                return Ok($crate::service::error_response($status));
             }
         }
     };
