@@ -27,7 +27,7 @@ impl Display for OllamaEndpoints {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self {
             OllamaEndpoints::Generate => write!(f, "/api/generate"),
-            OllamaEndpoints::Tags => todo!(),
+            OllamaEndpoints::Tags => write!(f, "/api/tags"),
         }
     }
 }
