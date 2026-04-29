@@ -18,7 +18,7 @@ use crate::{
     some_or_err,
 };
 
-pub async fn list_models<B>(
+pub(crate) async fn list_models<B>(
     AppState {
         ollama_uri,
         specifications: _,
@@ -37,7 +37,6 @@ where
         ))
         .await
     );
-
 
     let io = TokioIo::new(stream);
     let (mut http, conn) = server_err!(http1::handshake(io).await);

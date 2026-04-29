@@ -21,12 +21,12 @@ enum ErrorKind {
 
 #[derive(Debug)]
 #[allow(dead_code)]
-pub struct ServerError {
+pub(crate) struct ServerError {
     kind: ErrorKind,
 }
 
 impl ServerError {
-    pub fn new(reason: String) -> Self {
+    pub(crate) fn new(reason: String) -> Self {
         Self {
             kind: ErrorKind::Server(reason),
         }

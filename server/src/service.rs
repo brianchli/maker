@@ -1,20 +1,22 @@
 #[macro_use]
 mod macros;
 mod http;
-pub mod middlewares;
+pub(crate) mod middlewares;
 mod specification;
 
-pub use http::error_response;
+pub(crate) use http::error_response;
 
 use http_body_util::combinators::BoxBody;
 use hyper::body::Bytes;
 use std::{convert::Infallible, path::PathBuf};
 
-pub use crate::service::specification::prompt::{Filetype as File_t, ResolvedPrompt, TomlSpec};
+pub(crate) use crate::service::specification::prompt::{
+    Filetype as File_t, ResolvedPrompt, TomlSpec,
+};
 use serde::Deserialize;
 
-pub type Req<B> = hyper::Request<B>;
-pub type Response = hyper::Response<BoxBody<Bytes, Infallible>>;
+pub(crate) type Req<B> = hyper::Request<B>;
+pub(crate) type Response = hyper::Response<BoxBody<Bytes, Infallible>>;
 
 #[allow(dead_code)]
 #[derive(Deserialize, Debug)]

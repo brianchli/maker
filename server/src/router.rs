@@ -18,7 +18,7 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub enum OllamaEndpoints {
+pub(crate) enum OllamaEndpoints {
     Generate,
     Tags,
 }
@@ -43,7 +43,7 @@ impl From<OllamaEndpoints> for Uri {
     }
 }
 
-pub async fn router<B>(state: AppState, req: Req<B>) -> Result<Response, BoxError>
+pub(crate) async fn router<B>(state: AppState, req: Req<B>) -> Result<Response, BoxError>
 where
     B: Body,
     B::Error: Display,

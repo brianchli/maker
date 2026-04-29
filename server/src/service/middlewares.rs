@@ -29,14 +29,14 @@ pub(crate) mod policy {
     use std::sync::Arc;
 
     #[allow(non_snake_case)]
-    pub fn ALWAYS() -> Arc<dyn Fn(hyper::Request<Incoming>) -> GuardDecision<Incoming> + Send + Sync>
-    {
+    pub(crate) fn ALWAYS()
+    -> Arc<dyn Fn(hyper::Request<Incoming>) -> GuardDecision<Incoming> + Send + Sync> {
         Arc::new(always)
     }
 
     #[allow(non_snake_case)]
-    pub fn BYPASS() -> Arc<dyn Fn(hyper::Request<Incoming>) -> GuardDecision<Incoming> + Send + Sync>
-    {
+    pub(crate) fn BYPASS()
+    -> Arc<dyn Fn(hyper::Request<Incoming>) -> GuardDecision<Incoming> + Send + Sync> {
         Arc::new(never)
     }
 

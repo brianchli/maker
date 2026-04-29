@@ -8,7 +8,7 @@ use std::fmt::Display;
 use tower::BoxError;
 
 #[derive(Serialize, Deserialize)]
-pub struct TomlSpec {
+pub(crate) struct TomlSpec {
     model: Option<String>,
     system: Option<System>,
     think: Option<Boolish>,
@@ -17,7 +17,7 @@ pub struct TomlSpec {
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "filetype", rename_all = "lowercase")]
-pub enum Filetype {
+pub(crate) enum Filetype {
     Make { content: String },
     Cmake { content: String },
     Readme { content: String },
@@ -26,7 +26,7 @@ pub enum Filetype {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct System {
+pub(crate) struct System {
     #[serde(skip_serializing_if = "Option::is_none")]
     temperature: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -38,7 +38,7 @@ pub struct System {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct TaskContext {
+pub(crate) struct TaskContext {
     #[serde(skip_serializing_if = "Option::is_none")]
     system_prompt: Option<String>,
     prompt: String,
@@ -47,7 +47,7 @@ pub struct TaskContext {
 
 type Options = System;
 #[derive(Debug, Deserialize, Serialize)]
-pub struct ResolvedPrompt {
+pub(crate) struct ResolvedPrompt {
     pub(crate) model: Option<String>,
     prompt: String,
     #[serde(skip_serializing_if = "Option::is_none")]

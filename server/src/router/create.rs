@@ -17,9 +17,10 @@ use crate::{
     service::{AppState, OllamaResponse, Req, ResolvedPrompt, Response, TomlSpec},
     some_or_err,
 };
+
 use crate::{router::OllamaEndpoints, service::File_t};
 
-pub async fn create_route<B>(state: AppState, req: Req<B>) -> Result<Response, BoxError>
+pub(crate) async fn create_route<B>(state: AppState, req: Req<B>) -> Result<Response, BoxError>
 where
     B: Body,
     B::Error: Display,
