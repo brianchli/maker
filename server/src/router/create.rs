@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use http_body_util::{BodyExt, Full, combinators::BoxBody};
 use hyper::{
-    Method, Request, StatusCode,
+    Method, Request,
     body::{Body, Bytes},
     client::conn::http1,
     header::{CONTENT_TYPE, HOST},
@@ -14,7 +14,7 @@ use tracing::{event, info};
 
 use crate::{
     bad_request, server_err,
-    service::{AppState, OllamaResponse, Req, ResolvedPrompt, Response, TomlSpec, error_response},
+    service::{AppState, OllamaResponse, Req, ResolvedPrompt, Response, TomlSpec},
     some_or_err,
 };
 use crate::{router::OllamaEndpoints, service::File_t};
@@ -54,10 +54,9 @@ where
     let (mut http, conn) = server_err!(http1::handshake(io).await);
 
     tokio::task::spawn(async move {
-        Ok::<_, BoxError>(server_err!(
-            conn.await
-                .map(|_| error_response(StatusCode::INTERNAL_SERVER_ERROR))
-        ))
+        if let Err(e) = conn.await {
+            tracing::error!("connection error: {}", e);
+        }
     });
 
     let (parts, body) = req.into_parts();
