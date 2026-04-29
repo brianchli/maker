@@ -3,10 +3,7 @@
 
 use std::fmt::Write;
 
-use serde::{
-    Deserialize, Deserializer, Serialize,
-    de::{Error, Visitor},
-};
+use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use tower::BoxError;
 
@@ -56,7 +53,6 @@ pub(crate) struct ResolvedPrompt {
     #[serde(skip_serializing_if = "Option::is_none")]
     system_prompt: Option<String>,
     stream: bool,
-    #[serde(deserialize_with = "deserialize_boolish")]
     think: Boolish,
     #[serde(skip_serializing_if = "Option::is_none")]
     keep_alive: Option<String>,
@@ -64,48 +60,14 @@ pub(crate) struct ResolvedPrompt {
     options: Option<Options>,
 }
 
-#[derive(Debug, Serialize)]
-#[serde(untagged)]
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
 enum Boolish {
+    Low,
+    Medium,
+    High,
+    #[serde(untagged)]
     Bool(bool),
-    String(String),
-}
-
-impl<'de> Deserialize<'de> for Boolish {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        deserializer.deserialize_str(BoolishVisitor {})
-    }
-}
-
-struct BoolishVisitor {}
-impl<'de> Visitor<'de> for BoolishVisitor {
-    type Value = Boolish;
-
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(formatter, r#""true", "false", "low", "medium" or "high""#)
-    }
-
-    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-    where
-        E: Error,
-    {
-        match v {
-            "true" => Ok(Boolish::Bool(true)),
-            "false" => Ok(Boolish::Bool(false)),
-            "low" | "medium" | "high" => Ok(Boolish::String(v.to_string())),
-            other => Err(Error::unknown_variant(
-                other,
-                &["true", "false", "low", "medium", "high"],
-            )),
-        }
-    }
-}
-
-fn deserialize_boolish<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Boolish, D::Error> {
-    deserializer.deserialize_string(BoolishVisitor {})
 }
 
 impl Display for Filetype {

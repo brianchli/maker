@@ -1,19 +1,19 @@
 mod error;
+mod router;
 mod server;
 mod service;
 
 use crate::middlewares::policy;
-use hyper::server::conn::http1;
-use hyper_util::{rt::TokioIo, service::TowerToHyperService};
-use service::maker_run;
-use tokio::net::TcpListener;
-use tower::ServiceBuilder;
-use tracing::info;
-
+use crate::router::router;
 use crate::{
     server::{server_init, server_shutdown},
     service::middlewares::{self},
 };
+use hyper::server::conn::http1;
+use hyper_util::{rt::TokioIo, service::TowerToHyperService};
+use tokio::net::TcpListener;
+use tower::ServiceBuilder;
+use tracing::info;
 
 #[tokio::main]
 async fn main() -> Result<(), error::ServerError> {
@@ -35,7 +35,7 @@ async fn main() -> Result<(), error::ServerError> {
             .concurrency_limit(50)
             .service(tower::service_fn(move |req| {
                 let appstate = state.clone();
-                async move { maker_run(appstate, req).await }
+                async move { router(appstate, req).await }
             })),
     );
 

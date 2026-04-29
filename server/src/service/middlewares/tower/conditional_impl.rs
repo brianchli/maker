@@ -1,6 +1,5 @@
 use std::{
     fmt::{Debug, Display},
-    sync::Arc,
     task::Poll::{Pending, Ready},
 };
 
@@ -16,23 +15,6 @@ use crate::service::{
         PredicateFn,
     },
 };
-
-#[derive(Clone)]
-pub struct ConditionalServiceLayer<F> {
-    predicate: Arc<F>,
-}
-
-impl<F> ConditionalServiceLayer<F> {
-    pub fn new(f: F) -> Self {
-        Self {
-            predicate: Arc::new(f),
-        }
-    }
-
-    pub fn func(&self) -> Arc<F> {
-        self.predicate.clone()
-    }
-}
 
 #[derive(Clone)]
 pub struct ConditionalService<S1, S2, F, F1> {

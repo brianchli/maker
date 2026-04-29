@@ -1,13 +1,17 @@
 #![allow(dead_code)]
 mod tower;
 use std::sync::Arc;
+use std::sync::LazyLock;
 
+use hyper::body::Incoming;
 pub use tower::HttpErrResolver;
 pub use tower::RateLimiter;
 pub use tower::TimeoutLayer;
 
 use crate::service::AppState;
 use crate::service::Req;
+use crate::service::middlewares::policy::always;
+use crate::service::middlewares::policy::never;
 
 type PredicateBuilderFn<B> = fn(Req<B>) -> (bool, Req<B>);
 type PredicateBuilderFnWithState<B> = fn(AppState, Req<B>) -> (bool, Req<B>);
@@ -23,21 +27,27 @@ pub enum GuardDecision<B> {
     Bypass(Req<B>),
 }
 
+static ALWAYS: LazyLock<Arc<dyn Fn(Req<Incoming>) -> GuardDecision<Incoming> + Send + Sync>> =
+    LazyLock::new(|| Arc::new(always));
+
+static BYPASS: LazyLock<Arc<dyn Fn(Req<Incoming>) -> GuardDecision<Incoming> + Send + Sync>> =
+    LazyLock::new(|| Arc::new(never));
+
 pub(crate) mod policy {
 
     use hyper::body::{Body, Incoming};
     use std::sync::Arc;
 
     #[allow(non_snake_case)]
-    pub fn ALWAYS() -> Arc<dyn Fn(hyper::Request<Incoming>) -> GuardDecision<Incoming> + Send + Sync>
-    {
-        Arc::new(always)
+    pub(crate) fn ALWAYS()
+    -> Arc<dyn Fn(hyper::Request<Incoming>) -> GuardDecision<Incoming> + Send + Sync> {
+        Arc::clone(&*super::ALWAYS)
     }
 
     #[allow(non_snake_case)]
-    pub fn BYPASS() -> Arc<dyn Fn(hyper::Request<Incoming>) -> GuardDecision<Incoming> + Send + Sync>
-    {
-        Arc::new(never)
+    pub(crate) fn BYPASS()
+    -> Arc<dyn Fn(hyper::Request<Incoming>) -> GuardDecision<Incoming> + Send + Sync> {
+        Arc::clone(&*super::BYPASS)
     }
 
     use crate::service::{
@@ -134,7 +144,7 @@ pub(crate) mod policy {
         }
     }
 
-    fn never<B>(req: hyper::Request<B>) -> GuardDecision<B>
+    pub(super) fn never<B>(req: hyper::Request<B>) -> GuardDecision<B>
     where
         B: hyper::body::Body,
     {
@@ -142,7 +152,7 @@ pub(crate) mod policy {
         GuardDecision::Bypass(hyper::Request::from_parts(parts, body))
     }
 
-    fn always<B>(req: hyper::Request<B>) -> GuardDecision<B>
+    pub(super) fn always<B>(req: hyper::Request<B>) -> GuardDecision<B>
     where
         B: hyper::body::Body,
     {
