@@ -15,27 +15,50 @@
 
 ## Description
 
-`maker` is a high-performance Rust web server and utility designed to streamline
-file templating through specification-driven prompts and Ollama. It accepts a
-TOML configuration file that defines the structure and requirements of the
-desired output.
+maker is a Rust web server that turns TOML-defined templates into AI-generated
+files. It accepts a specification describing how to build a prompt, combines it
+with user input from an HTTP request, and sends the composed prompt to a local
+Ollama model. The generated file content is returned directly in the response.
+Built on tokio, hyper, and tower for async performance and composability.
 
-Built for speed and modularity, `maker` leverages the following core technologies:
+## Installation
 
-- **hyper**: For low-level HTTP functionality where remote prompts are utilized.
-- **tower**: For composable async services and middleware management.
-- **serde**: For robust serialization and deserialization of the TOML specifications.
-- **tokio**: For asychronous task coordination.
+## Prerequisites
+
+- [Rust](https://www.rust-lang.org/tools/install) (install via rustup)
+- [Ollama](https://ollama.com/download) running locally with a model pulled (e.g., `ollama pull llama3`)
+
+## Build from source
+
+Clone the repository and change into the project directory:
+
+```bash
+git clone git@github.com:brianchli/maker.git
+cd maker-server
+cargo build --release
+```
 
 ## Usage
 
-To use `maker`, create a TOML specification file describing the template requirements.
+1. Create an `.env` file that provides the ollama backend port and the maker-server
+   port.
+2. Create a TOML specification file that defines the template and prompt structure.
+For example, `template.toml` in the specification directory.
+3. Start the server. Send a POST request with the user input.
+
+   ```bash
+   curl -X POST http://<ollama_base_uri>:<port>/create \
+     -H "Content-Type: application/json" \
+     -d '{ "filetype": "readme", "content": "..." }'
+   ```
+
+The response body contains the generated file content. An example configuration
+is provided below.
 
 ### Configuration Example
 
-Create a file named `<filetype>.toml` in your specifications folder. As an
-example, the below is a file is a meta template generator for toml specification
-inputs to maker:
+Below is the TOML specification for a generator that creates maker compliant TOML configuration
+files.
 
 ```toml
 
