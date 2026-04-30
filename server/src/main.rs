@@ -31,7 +31,7 @@ async fn main() -> Result<(), error::ServerError> {
             .buffer(256)
             .layer(middlewares::HttpErrResolver::new())
             .layer(middlewares::RateLimiter::new(10, 10, policy::ALWAYS()))
-            .layer(middlewares::TimeoutLayer::from_mins(3, policy::ALWAYS()))
+            .layer(middlewares::TimeoutLayer::from_mins(3, policy::BYPASS()))
             .concurrency_limit(50)
             .service(tower::service_fn(move |req| {
                 let appstate = state.clone();
