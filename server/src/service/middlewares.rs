@@ -1,162 +1,36 @@
-#![allow(dead_code)]
 mod tower;
 use std::sync::Arc;
-use std::sync::LazyLock;
 
-use hyper::body::Incoming;
 pub use tower::HttpErrResolver;
 pub use tower::RateLimiter;
 pub use tower::TimeoutLayer;
 
-use crate::service::AppState;
 use crate::service::Req;
-use crate::service::middlewares::policy::always;
-use crate::service::middlewares::policy::never;
 
-type PredicateBuilderFn<B> = fn(Req<B>) -> (bool, Req<B>);
-type PredicateBuilderFnWithState<B> = fn(AppState, Req<B>) -> (bool, Req<B>);
 pub(crate) type PredicateFn<B> = Arc<dyn Fn(Req<B>) -> GuardDecision<B> + Send + Sync + 'static>;
-
-pub(crate) enum Predicate<B> {
-    Stateless(PredicateBuilderFn<B>),
-    Stateful(PredicateBuilderFnWithState<B>),
-}
 
 pub enum GuardDecision<B> {
     Continue(Req<B>),
     Bypass(Req<B>),
 }
 
-static ALWAYS: LazyLock<Arc<dyn Fn(Req<Incoming>) -> GuardDecision<Incoming> + Send + Sync>> =
-    LazyLock::new(|| Arc::new(always));
-
-static BYPASS: LazyLock<Arc<dyn Fn(Req<Incoming>) -> GuardDecision<Incoming> + Send + Sync>> =
-    LazyLock::new(|| Arc::new(never));
-
 pub(crate) mod policy {
 
-    use hyper::body::{Body, Incoming};
     use std::sync::Arc;
+
+    use hyper::body::Incoming;
+
+    use crate::service::middlewares::GuardDecision::{self, Continue, Bypass};
 
     #[allow(non_snake_case)]
     pub(crate) fn ALWAYS()
     -> Arc<dyn Fn(hyper::Request<Incoming>) -> GuardDecision<Incoming> + Send + Sync> {
-        Arc::clone(&*super::ALWAYS)
+        Arc::new(|req| Continue(req))
     }
 
     #[allow(non_snake_case)]
     pub(crate) fn BYPASS()
     -> Arc<dyn Fn(hyper::Request<Incoming>) -> GuardDecision<Incoming> + Send + Sync> {
-        Arc::clone(&*super::BYPASS)
-    }
-
-    use crate::service::{
-        AppState, Req,
-        middlewares::{GuardDecision, Predicate, PredicateBuilderFn, PredicateBuilderFnWithState},
-    };
-
-    use super::PredicateFn;
-
-    impl<B> From<(Option<AppState>, Predicate<B>)> for MiddlewareGuardBuilder<B>
-    where
-        B: Body + 'static,
-    {
-        fn from(value: (Option<AppState>, Predicate<B>)) -> Self {
-            Self::new(value.0, value.1)
-        }
-    }
-
-    impl<B> From<MiddlewareGuardBuilder<B>> for (Option<AppState>, Predicate<B>)
-    where
-        B: Body,
-    {
-        fn from(value: MiddlewareGuardBuilder<B>) -> Self {
-            (value.state, value.pred)
-        }
-    }
-
-    pub struct MiddlewareGuardBuilder<B> {
-        state: Option<AppState>,
-        pred: Predicate<B>,
-    }
-
-    impl<B> MiddlewareGuardBuilder<B>
-    where
-        B: Body + 'static,
-    {
-        pub(crate) fn new(state: Option<AppState>, pred: Predicate<B>) -> Self {
-            Self { state, pred }
-        }
-
-        pub(crate) fn state(self, state: AppState) -> Self {
-            Self {
-                state: Some(state),
-                ..self
-            }
-        }
-
-        pub(crate) fn predicate(self, pred: Predicate<B>) -> Self {
-            Self { pred, ..self }
-        }
-
-        pub(crate) fn generate(self) -> Result<PredicateFn<B>, String> {
-            let (mut state, pred) = self.into();
-            if let Predicate::Stateful(_) = pred
-                && state.is_none()
-            {
-                return Err("Stateful predicate requires AppState".into());
-            };
-            let s = state
-                .take()
-                .expect("Stateful predicate without an AppState");
-
-            Ok(Arc::new(move |req| match pred {
-                Predicate::Stateless(f) => (custom_fn(f))(req),
-                Predicate::Stateful(f) => (custom_fn_with_state(s.clone(), f))(req),
-            }))
-        }
-    }
-
-    pub(crate) fn custom_fn<B>(pred: PredicateBuilderFn<B>) -> impl Fn(Req<B>) -> GuardDecision<B>
-    where
-        B: hyper::body::Body,
-    {
-        move |req| -> GuardDecision<B> {
-            match pred(req) {
-                (true, request) => GuardDecision::Continue(request),
-                (_, request) => GuardDecision::Bypass(request),
-            }
-        }
-    }
-
-    pub(crate) fn custom_fn_with_state<B>(
-        state: AppState,
-        pred: PredicateBuilderFnWithState<B>,
-    ) -> impl Fn(Req<B>) -> GuardDecision<B>
-    where
-        B: hyper::body::Body,
-    {
-        move |req| -> GuardDecision<B> {
-            match pred(state.clone(), req) {
-                (true, request) => GuardDecision::Continue(request),
-                (_, request) => GuardDecision::Bypass(request),
-            }
-        }
-    }
-
-    pub(super) fn never<B>(req: hyper::Request<B>) -> GuardDecision<B>
-    where
-        B: hyper::body::Body,
-    {
-        let (parts, body) = req.into_parts();
-        GuardDecision::Bypass(hyper::Request::from_parts(parts, body))
-    }
-
-    pub(super) fn always<B>(req: hyper::Request<B>) -> GuardDecision<B>
-    where
-        B: hyper::body::Body,
-    {
-        let (parts, body) = req.into_parts();
-        GuardDecision::Continue(hyper::Request::from_parts(parts, body))
+        Arc::new(|req| Bypass(req))
     }
 }

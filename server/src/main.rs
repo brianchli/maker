@@ -3,11 +3,11 @@ mod router;
 mod server;
 mod service;
 
-use crate::middlewares::policy;
 use crate::router::router;
 use crate::{
     server::{server_init, server_shutdown},
     service::middlewares::{self},
+    service::middlewares::policy,
 };
 use hyper::server::conn::http1;
 use hyper_util::{rt::TokioIo, service::TowerToHyperService};

@@ -25,27 +25,21 @@ impl RateLimiter {
     }
 }
 
-type RateLimitService<S, S1, F, F1> = ConditionalService<S, S1, F, F1>;
+type RateLimitService<S, S1> = ConditionalService<S, S1>;
 impl<S> tower::Layer<S> for RateLimiter
 where
     S: Clone,
 {
-    type Service =
-        RateLimitService<S, RateLimit<S>, PredicateFn<Incoming>, fn(&Req<Incoming>) -> Span>;
+    type Service = RateLimitService<S, RateLimit<S>>;
 
     fn layer(&self, inner: S) -> Self::Service {
         let other = inner.clone();
 
-        fn ratelimit_span<B>(_req: &Req<B>) -> Span {
-            Span::current()
-        }
-
         Self::Service::new(
-            "ratelimit",
             inner,
             RateLimit::new(other, Rate::new(self.requests, self.duration)),
             self.f.clone(),
-            ratelimit_span,
+            |_: &Req<Incoming>| Span::current(),
         )
     }
 }
