@@ -1,8 +1,12 @@
 use std::{net::SocketAddr, path::PathBuf};
 
+use hyper::{HeaderMap, Request, body::Incoming};
 use tokio::signal::unix::SignalKind;
 
-use crate::{error, service::AppState};
+use crate::{
+    error,
+    service::{AppState, Req},
+};
 
 pub(crate) fn server_init() -> Result<(AppState, SocketAddr), error::ServerError> {
     let port = std::env::var("BACKEND_PORT")
@@ -37,6 +41,42 @@ pub(crate) fn server_init() -> Result<(AppState, SocketAddr), error::ServerError
                 .map_err(|_| error::ServerError::new("Unable to parse port number".into()))?,
         )),
     ))
+}
+
+pub(crate) enum RequestOrigin {
+    Internal,
+    External,
+}
+
+fn is_public_host(uri: &hyper::http::Uri) -> bool {
+    uri.host().is_some_and(|val| val == "maker.bidn.dev")
+}
+
+fn is_cloudflare_proxied(headers: &HeaderMap) -> bool {
+    // server will only be accessible via cloudflare proxy
+    headers.get("cf-connecting-ip").is_some()
+}
+
+pub(crate) fn is_private_request(req: Req<Incoming>) -> (RequestOrigin, Req<Incoming>) {
+    let (parts, body) = req.into_parts();
+    let is_public = is_public_host(&parts.uri);
+    let is_cloudflare = is_cloudflare_proxied(&parts.headers);
+    match (is_public, is_cloudflare) {
+        (false, false) => (RequestOrigin::Internal, Request::from_parts(parts, body)),
+        (false, _) | (_, false) => {
+            tracing::warn!(
+                host = parts.uri.host().unwrap_or("null"),
+                ip = parts
+                    .headers
+                    .get("x-real-ip")
+                    .and_then(|v| v.to_str().ok())
+                    .unwrap_or("null"),
+                r#"unexpected request src combination: public={is_public}, cloudflare={is_cloudflare}"#
+            );
+            (RequestOrigin::External, Request::from_parts(parts, body))
+        }
+        _ => (RequestOrigin::External, Request::from_parts(parts, body)),
+    }
 }
 
 pub(crate) async fn server_shutdown() {
