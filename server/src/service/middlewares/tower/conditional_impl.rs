@@ -5,7 +5,10 @@ use std::{
 };
 
 use futures_util::future::Either;
-use hyper::{Response, body::{Body, Incoming}};
+use hyper::{
+    Response,
+    body::{Body, Incoming},
+};
 use tower::{BoxError, Service};
 use tracing::{Instrument, Span, instrument::Instrumented};
 
@@ -79,8 +82,8 @@ where
         let span = (self.span_generator)(&req);
         tracing::debug!(parent: &span, "call");
         match (self.predicate)(req) {
-            Continue(req) => Either::Right(self.service_2.call(req).instrument(span)),
             Bypass(req) => Either::Left(self.service_1.call(req).instrument(span)),
+            Continue(req) => Either::Right(self.service_2.call(req).instrument(span)),
         }
     }
 }

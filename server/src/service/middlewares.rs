@@ -20,17 +20,17 @@ pub(crate) mod policy {
 
     use hyper::body::Incoming;
 
-    use crate::service::middlewares::GuardDecision::{self, Continue, Bypass};
+    use crate::service::middlewares::GuardDecision::{self, Bypass, Continue};
 
     #[allow(non_snake_case)]
     pub(crate) fn ALWAYS()
     -> Arc<dyn Fn(hyper::Request<Incoming>) -> GuardDecision<Incoming> + Send + Sync> {
-        Arc::new(|req| Continue(req))
+        Arc::new(Continue)
     }
 
     #[allow(non_snake_case)]
     pub(crate) fn BYPASS()
     -> Arc<dyn Fn(hyper::Request<Incoming>) -> GuardDecision<Incoming> + Send + Sync> {
-        Arc::new(|req| Bypass(req))
+        Arc::new(Bypass)
     }
 }
