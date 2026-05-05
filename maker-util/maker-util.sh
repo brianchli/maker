@@ -17,7 +17,7 @@ CURL_OPTS=(-s --fail -H "Accept: application/json")
 
 _maker_usage() {
   cat <<EOF
-maker-util: ergonomic CLI for the Maker
+maker-util: ergonomic CLI invoking the Maker Endpoint
 
 Usage:
   maker-util [command] [args]
@@ -25,7 +25,7 @@ Usage:
 Commands:
   create [filetype]     Generate a file
   models                List available models
-  help | h              Show this help
+  --help | -h              Show this help
 
 Environment:
   MAKER_ENDPOINT       Base URL for the Maker API (default: maker)
@@ -82,7 +82,7 @@ case ${COMMAND} in
     fi
     ;;
 
-  "help" | "-h" | "--help")
+  "-h" | "--help")
     _maker_usage
     ;;
 
