@@ -3,16 +3,20 @@ mod router;
 mod server;
 mod service;
 
-use crate::middlewares::policy;
 use crate::router::router;
+use crate::server::{RequestOrigin, is_private_request};
 use crate::{
     server::{server_init, server_shutdown},
-    service::middlewares::{self},
+    service::middlewares,
+    service::middlewares::policy,
 };
+use futures_util::future::Either;
+use hyper::Request;
+use hyper::body::Incoming;
 use hyper::server::conn::http1;
 use hyper_util::{rt::TokioIo, service::TowerToHyperService};
 use tokio::net::TcpListener;
-use tower::ServiceBuilder;
+use tower::{ServiceBuilder, ServiceExt, service_fn};
 use tracing::info;
 
 #[tokio::main]
@@ -25,19 +29,34 @@ async fn main() -> Result<(), error::ServerError> {
         .with_target(false)
         .init();
 
-    let svc = TowerToHyperService::new(
-        ServiceBuilder::new()
-            .layer(tower_http::trace::TraceLayer::new_for_http())
-            .buffer(256)
-            .layer(middlewares::HttpErrResolver::new())
-            .layer(middlewares::RateLimiter::new(10, 10, policy::ALWAYS()))
-            .layer(middlewares::TimeoutLayer::from_mins(3, policy::BYPASS()))
-            .concurrency_limit(50)
-            .service(tower::service_fn(move |req| {
-                let appstate = state.clone();
-                async move { router(appstate, req).await }
-            })),
-    );
+    let s = state.clone();
+    let internal_svc = ServiceBuilder::new()
+        .layer(tower_http::trace::TraceLayer::new_for_http())
+        .layer(middlewares::HttpErrResolver::new())
+        .layer(middlewares::TimeoutLayer::from_mins(10, policy::BYPASS()))
+        .service(tower::service_fn(move |req| {
+            let appstate = s.clone();
+            async move { router(appstate, req).await }
+        }));
+
+    let external_svc = ServiceBuilder::new()
+        .layer(tower_http::trace::TraceLayer::new_for_http())
+        .buffer(256)
+        .layer(middlewares::HttpErrResolver::new())
+        .layer(middlewares::RateLimiter::new(10, 10, policy::ALWAYS()))
+        .layer(middlewares::TimeoutLayer::from_mins(3, policy::BYPASS()))
+        .concurrency_limit(50)
+        .service(tower::service_fn(move |req| {
+            let appstate = state.clone();
+            async move { router(appstate, req).await }
+        }));
+
+    let svc = TowerToHyperService::new(ServiceBuilder::new().service(service_fn(
+        move |req: Request<Incoming>| match is_private_request(req) {
+            (RequestOrigin::Internal, req) => Either::Left(internal_svc.clone().oneshot(req)),
+            (RequestOrigin::External, req) => Either::Right(external_svc.clone().oneshot(req)),
+        },
+    )));
 
     let listener = TcpListener::bind(addr).await?;
     let graceful = hyper_util::server::graceful::GracefulShutdown::new();

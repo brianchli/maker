@@ -1,12 +1,16 @@
 use std::{
-    fmt::{Debug, Display},
-    task::Poll::{Pending, Ready},
+    fmt::Debug,
+    future::Future,
+    task::{Context, Poll, Poll::Ready, ready},
 };
 
 use futures_util::future::Either;
-use hyper::body::Body;
+use hyper::{
+    Response,
+    body::{Body, Incoming},
+};
 use tower::{BoxError, Service};
-use tracing::{Instrument, Span, event, info, instrument::Instrumented};
+use tracing::{Instrument, Span, instrument::Instrumented};
 
 use crate::service::{
     Req,
@@ -17,24 +21,21 @@ use crate::service::{
 };
 
 #[derive(Clone)]
-pub struct ConditionalService<S1, S2, F, F1> {
-    name: &'static str,
+pub struct ConditionalService<S1, S2> {
     service_1: S1,
     service_2: S2,
-    predicate: F,
-    span_generator: F1,
+    predicate: PredicateFn<Incoming>,
+    span_generator: fn(&Req<Incoming>) -> Span,
 }
 
-impl<S1, S2, F, F1> ConditionalService<S1, S2, F, F1> {
+impl<S1, S2> ConditionalService<S1, S2> {
     pub fn new(
-        name: &'static str,
         service_1: S1,
         service_2: S2,
-        predicate: F,
-        span_generator: F1,
+        predicate: PredicateFn<Incoming>,
+        span_generator: fn(&Req<Incoming>) -> Span,
     ) -> Self {
         Self {
-            name,
             service_1,
             service_2,
             predicate,
@@ -43,55 +44,46 @@ impl<S1, S2, F, F1> ConditionalService<S1, S2, F, F1> {
     }
 }
 
-impl<S1, S2, F, F1> Display for ConditionalService<S1, S2, F, F1> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.name)
-    }
-}
-
 type TracedFuture<T> = Instrumented<T>;
-impl<S1, S2, B, B1, F1> Service<Req<B>> for ConditionalService<S1, S2, PredicateFn<B>, F1>
+impl<S1, S2, B1> Service<Req<Incoming>> for ConditionalService<S1, S2>
 where
-    B: Body,
     B1: Body,
-    S1: Service<Req<B>, Response = hyper::Response<B1>>,
-    S2: Service<Req<B>, Response = hyper::Response<B1>>,
+    S1: Service<Req<Incoming>, Response = Response<B1>>,
+    S2: Service<Req<Incoming>, Response = Response<B1>>,
     S1::Error: Into<BoxError> + Debug,
     S2::Error: Into<BoxError> + Debug,
-    S1::Future: Future<Output = Result<hyper::Response<B1>, BoxError>>,
-    S2::Future: Future<Output = Result<hyper::Response<B1>, BoxError>>,
-    F1: Fn(&Req<B>) -> Span,
+    S1::Future: Future<Output = Result<Response<B1>, BoxError>>,
+    S2::Future: Future<Output = Result<Response<B1>, BoxError>>,
 {
-    type Response = hyper::Response<B1>;
+    type Response = Response<B1>;
     type Error = BoxError;
     type Future = Either<TracedFuture<S1::Future>, TracedFuture<S2::Future>>;
 
-    fn poll_ready(
-        &mut self,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<(), Self::Error>> {
-        let a = self.service_1.poll_ready(cx);
-        if let Ready(Err(e)) = a {
-            info!("{} error: {:?}", self, e);
-            return Ready(Err(e.into()));
-        };
-        let b = self.service_2.poll_ready(cx);
-        if let Ready(Err(e)) = b {
-            info!("{} error: {:?}", self, e);
-            return Ready(Err(e.into()));
-        };
-        event!(target:module_path!(),tracing::Level::DEBUG,"poll ready");
-        match (a, b) {
-            (Ready(_), Ready(_)) => Ready(Ok(())),
-            _ => Pending,
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        match ready!(self.service_1.poll_ready(cx)) {
+            Ok(()) => {}
+            Err(e) => {
+                tracing::warn!("error: {:?}", e);
+                return Ready(Err(e.into()));
+            }
         }
+        match ready!(self.service_2.poll_ready(cx)) {
+            Ok(()) => {}
+            Err(e) => {
+                tracing::warn!("error: {:?}", e);
+                return Ready(Err(e.into()));
+            }
+        }
+        tracing::debug!("poll ready");
+        Ready(Ok(()))
     }
-    fn call(&mut self, req: Req<B>) -> Self::Future {
+
+    fn call(&mut self, req: Req<Incoming>) -> Self::Future {
         let span = (self.span_generator)(&req);
-        event!(target:module_path!(),tracing::Level::DEBUG, "call");
+        tracing::debug!(parent: &span, "call");
         match (self.predicate)(req) {
-            Continue(request) => Either::Right(self.service_2.call(request).instrument(span)),
-            Bypass(request) => Either::Left(self.service_1.call(request).instrument(span)),
+            Bypass(req) => Either::Left(self.service_1.call(req).instrument(span)),
+            Continue(req) => Either::Right(self.service_2.call(req).instrument(span)),
         }
     }
 }
