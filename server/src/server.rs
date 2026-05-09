@@ -1,6 +1,6 @@
 use std::{net::SocketAddr, path::PathBuf};
 
-use hyper::{HeaderMap, Request, body::Incoming};
+use hyper::{Request, body::Incoming};
 use tokio::signal::unix::SignalKind;
 
 use crate::error;
@@ -50,34 +50,27 @@ pub(crate) enum RequestOrigin {
     External,
 }
 
-fn is_public_host(uri: &hyper::http::Uri) -> bool {
-    uri.host().is_some_and(|val| val == "maker.bidn.dev")
-}
-
-fn is_cloudflare_proxied(headers: &HeaderMap) -> bool {
-    // server will only be accessible via cloudflare proxy
-    headers.get("cf-connecting-ip").is_some()
-}
-
 pub(crate) fn is_private_request(req: Req<Incoming>) -> (RequestOrigin, Req<Incoming>) {
     let (parts, body) = req.into_parts();
-    let is_public = is_public_host(&parts.uri);
-    let is_cloudflare = is_cloudflare_proxied(&parts.headers);
-    match (is_public, is_cloudflare) {
-        (false, false) => (RequestOrigin::Internal, Request::from_parts(parts, body)),
-        (false, _) | (_, false) => {
+    let origin = classify_origin(
+        parts.uri.host(),
+        parts.headers.get("cf-connecting-ip").is_some(),
+    );
+    (origin, Request::from_parts(parts, body))
+}
+
+fn classify_origin(host: Option<&str>, is_cloudflare: bool) -> RequestOrigin {
+    match (host.is_some_and(|h| h == "maker.bidn.dev"), is_cloudflare) {
+        (false, false) => RequestOrigin::Internal,
+        (public, cloudflare) => {
             tracing::warn!(
-                host = parts.uri.host().unwrap_or("null"),
-                ip = parts
-                    .headers
-                    .get("x-real-ip")
-                    .and_then(|v| v.to_str().ok())
-                    .unwrap_or("null"),
-                r#"unexpected request src combination: public={is_public}, cloudflare={is_cloudflare}"#
+                host = host.unwrap_or("null"),
+                public = public,
+                cloudflare = cloudflare,
+                "unexpected request src combination"
             );
-            (RequestOrigin::External, Request::from_parts(parts, body))
+            RequestOrigin::External
         }
-        _ => (RequestOrigin::External, Request::from_parts(parts, body)),
     }
 }
 
@@ -88,5 +81,40 @@ pub(crate) async fn server_shutdown() {
     tokio::select! {
         _ = cntl_c => {}
         _ = sigterm.recv() => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn internal_request_no_public_host_no_cloudflare() {
+        let origin = classify_origin(Some("maker.app.io"), false);
+        assert!(matches!(origin, RequestOrigin::Internal));
+    }
+
+    #[test]
+    fn external_request_public_host_no_cloudflare() {
+        let origin = classify_origin(Some("maker.bidn.dev"), false);
+        assert!(matches!(origin, RequestOrigin::External));
+    }
+
+    #[test]
+    fn external_request_internal_host_with_cloudflare() {
+        let origin = classify_origin(Some("maker.app.io"), true);
+        assert!(matches!(origin, RequestOrigin::External));
+    }
+
+    #[test]
+    fn external_request_public_host_with_cloudflare() {
+        let origin = classify_origin(Some("maker.bidn.dev"), true);
+        assert!(matches!(origin, RequestOrigin::External));
+    }
+
+    #[test]
+    fn internal_request_no_host_no_cloudflare() {
+        let origin = classify_origin(None, false);
+        assert!(matches!(origin, RequestOrigin::Internal));
     }
 }
