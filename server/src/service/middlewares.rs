@@ -22,14 +22,12 @@ pub(crate) mod policy {
 
     use crate::service::middlewares::GuardDecision::{self, Bypass, Continue};
 
-    #[allow(non_snake_case)]
-    pub(crate) fn ALWAYS()
+    pub(crate) fn always()
     -> Arc<dyn Fn(hyper::Request<Incoming>) -> GuardDecision<Incoming> + Send + Sync> {
         Arc::new(Continue)
     }
 
-    #[allow(non_snake_case)]
-    pub(crate) fn BYPASS()
+    pub(crate) fn bypass()
     -> Arc<dyn Fn(hyper::Request<Incoming>) -> GuardDecision<Incoming> + Send + Sync> {
         Arc::new(Bypass)
     }

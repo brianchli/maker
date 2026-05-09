@@ -33,7 +33,7 @@ async fn main() -> Result<(), error::ServerError> {
     let internal_svc = ServiceBuilder::new()
         .layer(tower_http::trace::TraceLayer::new_for_http())
         .layer(middlewares::HttpErrResolver::new())
-        .layer(middlewares::TimeoutLayer::from_mins(10, policy::BYPASS()))
+        .layer(middlewares::TimeoutLayer::from_mins(10, policy::bypass()))
         .service(tower::service_fn(move |req| {
             let appstate = s.clone();
             async move { router(appstate, req).await }
@@ -43,8 +43,8 @@ async fn main() -> Result<(), error::ServerError> {
         .layer(tower_http::trace::TraceLayer::new_for_http())
         .buffer(256)
         .layer(middlewares::HttpErrResolver::new())
-        .layer(middlewares::RateLimiter::new(10, 10, policy::ALWAYS()))
-        .layer(middlewares::TimeoutLayer::from_mins(3, policy::BYPASS()))
+        .layer(middlewares::RateLimiter::new(10, 10, policy::always()))
+        .layer(middlewares::TimeoutLayer::from_mins(3, policy::bypass()))
         .concurrency_limit(50)
         .service(tower::service_fn(move |req| {
             let appstate = state.clone();
