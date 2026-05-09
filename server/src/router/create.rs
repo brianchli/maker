@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use http_body_util::{BodyExt, Full, combinators::BoxBody};
 use hyper::{
-    Method, Request,
+    Method, Request, StatusCode,
     body::{Body, Bytes},
     client::conn::http1,
     header::{CONTENT_TYPE, HOST},
@@ -14,7 +14,10 @@ use tracing::{event, info};
 
 use crate::{
     bad_request, server_err,
-    service::{AppState, Filetype, OllamaResponse, Req, ResolvedPrompt, Response, TomlSpec},
+    service::{
+        AppState, Filetype, OllamaResponse, Req, ResolvedPrompt, Response, TomlSpec,
+        error_response,
+    },
     some_or_err,
 };
 
@@ -28,7 +31,15 @@ where
     if req.method() != Method::POST {
         return Err("method not allowed".into());
     }
-    Ok(maker_run(state, req).await?)
+    if !req
+        .headers()
+        .get(CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|ct| ct.starts_with("application/json"))
+    {
+        return Ok(error_response(StatusCode::UNSUPPORTED_MEDIA_TYPE));
+    }
+    maker_run(state, req).await
 }
 
 async fn maker_run<B>(
@@ -103,7 +114,7 @@ where
     );
 
     let res = server_err!(http.send_request(req).await);
-    let (parts, body) = res.into_parts();
+    let (_parts, body) = res.into_parts();
     let bytes = server_err!(body.collect().await).to_bytes();
     let OllamaResponse {
         response,
@@ -126,5 +137,9 @@ where
     );
 
     let body: Full<Bytes> = Full::from(response.into_bytes());
-    Ok(hyper::Response::from_parts(parts, BoxBody::new(body)))
+    let mut response = hyper::Response::new(BoxBody::new(body));
+    response
+        .headers_mut()
+        .insert(CONTENT_TYPE, "text/plain; charset=utf-8".parse().unwrap());
+    Ok(response)
 }
