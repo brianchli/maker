@@ -77,8 +77,8 @@ where
     B: Body,
     B::Error: Display,
 {
-    match req.method() {
-        &Method::GET => list_models(state, req).await,
-        _ => Err("".into()),
+    if req.method() != Method::GET {
+        return Err("method not allowed".into());
     }
+    list_models(state, req).await
 }

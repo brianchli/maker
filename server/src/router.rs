@@ -51,6 +51,6 @@ where
     Ok(match req.uri().path() {
         "/create" => bad_request!(create_route(state, req).await),
         "/models" => bad_request!(models_route(state, req).await),
-        _ => bad_request!(Err("")),
+        _ => bad_request!(Err("not found")),
     })
 }

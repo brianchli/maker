@@ -25,10 +25,10 @@ where
     B: Body,
     B::Error: Display,
 {
-    match req.method() {
-        &Method::POST => Ok(maker_run(state, req).await?),
-        _ => Err("".into()),
+    if req.method() != Method::POST {
+        return Err("method not allowed".into());
     }
+    Ok(maker_run(state, req).await?)
 }
 
 async fn maker_run<B>(
