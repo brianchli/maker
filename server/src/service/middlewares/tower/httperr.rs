@@ -114,12 +114,11 @@ where
             }
         } else if let (Some(ip), Some(host)) =
             (parts.headers.get("x-real-ip"), parts.headers.get(HOST))
+            && let (Ok(ip), Ok(host)) = (ip.to_str(), host.to_str())
         {
-            if let (Ok(ip), Ok(host)) = (ip.to_str(), host.to_str()) {
-                span.in_scope(|| {
-                    info!(ip = %ip, host = %host, "Incoming internal request");
-                })
-            }
+            span.in_scope(|| {
+                info!(ip = %ip, host = %host, "Incoming internal request");
+            })
         };
 
         HttpErrFuture::new(self.inner.call(hyper::Request::from_parts(parts, body)))
