@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use http_body_util::{BodyExt, Empty, Full, combinators::BoxBody};
 use hyper::{
-    Method, Request, StatusCode,
+    Method, Request,
     body::{Body, Bytes},
     client::conn::http1,
     header::{CONTENT_TYPE, HOST},
@@ -14,7 +14,7 @@ use tower::BoxError;
 use crate::{
     router::OllamaEndpoints,
     server_err,
-    service::{AppState, Req, Response, error_response},
+    service::{AppState, Req, Response},
     some_or_err,
 };
 
@@ -43,10 +43,9 @@ where
     let (mut http, conn) = server_err!(http1::handshake(io).await);
 
     tokio::task::spawn(async move {
-        Ok::<_, BoxError>(server_err!(
-            conn.await
-                .map(|_| error_response(StatusCode::INTERNAL_SERVER_ERROR))
-        ))
+        if let Err(e) = conn.await {
+            tracing::error!("connection error: {}", e);
+        }
     });
 
     let req = server_err!(
