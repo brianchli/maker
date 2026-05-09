@@ -35,5 +35,4 @@ COPY --from=build /etc/passwd /etc/passwd
 COPY --from=build /etc/group /etc/group
 USER web:web
 COPY --from=build --chown=web:web /server /app/server
-EXPOSE ${BACKEND_PORT}
 ENTRYPOINT ["./app/server"]
