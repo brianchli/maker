@@ -14,11 +14,11 @@ use tracing::{event, info};
 
 use crate::{
     bad_request, server_err,
-    service::{AppState, OllamaResponse, Req, ResolvedPrompt, Response, TomlSpec},
+    service::{AppState, Filetype, OllamaResponse, Req, ResolvedPrompt, Response, TomlSpec},
     some_or_err,
 };
 
-use crate::{router::OllamaEndpoints, service::File_t};
+use crate::router::OllamaEndpoints;
 
 pub(crate) async fn create_route<B>(state: AppState, req: Req<B>) -> Result<Response, BoxError>
 where
@@ -61,24 +61,24 @@ where
     });
 
     let (parts, body) = req.into_parts();
-    let file_t: File_t = bad_request!(serde_json::from_slice(
+    let filetype: Filetype = bad_request!(serde_json::from_slice(
         &server_err!(body.collect().await).to_bytes()
     ));
 
-    specifications.push(match &file_t {
-        File_t::Make { .. } => "make.toml",
-        File_t::Cmake { .. } => "cmake.toml",
-        File_t::Readme { .. } => "readme.toml",
-        File_t::Docker { .. } => "docker.toml",
-        File_t::Spec { .. } => "spec.toml",
+    specifications.push(match &filetype {
+        Filetype::Make { .. } => "make.toml",
+        Filetype::Cmake { .. } => "cmake.toml",
+        Filetype::Readme { .. } => "readme.toml",
+        Filetype::Docker { .. } => "docker.toml",
+        Filetype::Spec { .. } => "spec.toml",
     });
 
     let spec: TomlSpec = server_err!(toml::from_slice(
         server_err!(tokio::fs::read(&specifications).await).as_slice()
     ));
 
-    info!("ollama request for {}", &file_t);
-    let mut prompt = server_err!(ResolvedPrompt::try_from((spec, file_t)));
+    info!("ollama request for {}", &filetype);
+    let mut prompt = server_err!(ResolvedPrompt::try_from((spec, filetype)));
     event!(target:module_path!(),tracing::Level::DEBUG,"{:?}", &prompt);
     prompt.model.get_or_insert("qwen3.5:cloud".into());
     let req = server_err!(

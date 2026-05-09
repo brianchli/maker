@@ -10,9 +10,7 @@ use http_body_util::combinators::BoxBody;
 use hyper::body::Bytes;
 use std::{convert::Infallible, path::PathBuf};
 
-pub(crate) use crate::service::specification::prompt::{
-    Filetype as File_t, ResolvedPrompt, TomlSpec,
-};
+pub(crate) use crate::service::specification::prompt::{Filetype, ResolvedPrompt, TomlSpec};
 use serde::Deserialize;
 
 pub(crate) type Req<B> = hyper::Request<B>;
