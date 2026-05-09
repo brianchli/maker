@@ -57,7 +57,7 @@ case ${COMMAND} in
 
   "create")
     if [[ -z ${FILE_T} ]]; then
-      FILE_T=$(gum choose --header "filetype" "cmake" "make" "readme") || exit 0
+      FILE_T=$(gum choose --header "filetype" "cmake" "docker" "make" "readme" "spec") || exit 0
     fi
 
     CONTENT=$(gum write \
