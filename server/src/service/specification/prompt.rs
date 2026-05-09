@@ -75,7 +75,7 @@ impl Display for Filetype {
         match &self {
             Filetype::Make { .. } => write!(f, "Makefile"),
             Filetype::Cmake { .. } => write!(f, "Cmake"),
-            Filetype::Readme { .. } => write!(f, "Readme"),
+            Filetype::Readme { .. } => write!(f, "README"),
             Filetype::Docker { .. } => write!(f, "Docker"),
             Filetype::Spec { .. } => write!(f, "Spec"),
         }
