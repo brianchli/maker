@@ -34,13 +34,19 @@ pub(crate) struct OllamaResponse {
 pub(crate) struct AppState {
     pub(crate) ollama_uri: hyper::Uri,
     pub(crate) specifications: PathBuf,
+    pub(crate) default_model: String,
 }
 
 impl AppState {
-    pub(crate) fn new(ollama_uri: hyper::Uri, specifications: PathBuf) -> Self {
+    pub(crate) fn new(
+        ollama_uri: hyper::Uri,
+        specifications: PathBuf,
+        default_model: String,
+    ) -> Self {
         Self {
             ollama_uri,
             specifications,
+            default_model,
         }
     }
 }

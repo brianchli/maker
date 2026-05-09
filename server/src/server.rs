@@ -3,10 +3,8 @@ use std::{net::SocketAddr, path::PathBuf};
 use hyper::{HeaderMap, Request, body::Incoming};
 use tokio::signal::unix::SignalKind;
 
-use crate::{
-    error,
-    service::{AppState, Req},
-};
+use crate::error;
+use crate::service::{AppState, Req};
 
 pub(crate) fn server_init() -> Result<(AppState, SocketAddr), error::ServerError> {
     let port = std::env::var("BACKEND_PORT")
@@ -14,6 +12,9 @@ pub(crate) fn server_init() -> Result<(AppState, SocketAddr), error::ServerError
 
     let ollama_port = std::env::var("OLLAMA_PORT")
         .map_err(|_| error::ServerError::new("Missing ollama backend port".into()))?;
+
+    let default_model = std::env::var("DEFAULT_OLLAMA_MODEL")
+        .map_err(|_| error::ServerError::new("Missing default ollama model fallback".into()))?;
 
     let specifications = PathBuf::from("/app/specifications");
 
@@ -31,6 +32,7 @@ pub(crate) fn server_init() -> Result<(AppState, SocketAddr), error::ServerError
             .parse()
             .map_err(|_| error::ServerError::new("Unable to parse ollama uri".into()))?,
         specifications,
+        default_model,
     );
 
     Ok((

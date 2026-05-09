@@ -22,6 +22,7 @@ pub(crate) async fn list_models<B>(
     AppState {
         ollama_uri,
         specifications: _,
+        default_model: _,
     }: AppState,
     req: Req<B>,
 ) -> Result<Response, BoxError>

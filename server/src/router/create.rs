@@ -35,6 +35,7 @@ async fn maker_run<B>(
     AppState {
         ollama_uri,
         mut specifications,
+        default_model,
     }: AppState,
     req: Req<B>,
 ) -> Result<Response, BoxError>
@@ -80,7 +81,9 @@ where
     info!("ollama request for {}", &filetype);
     let mut prompt = server_err!(ResolvedPrompt::try_from((spec, filetype)));
     event!(target:module_path!(),tracing::Level::DEBUG,"{:?}", &prompt);
-    prompt.model.get_or_insert("qwen3.5:cloud".into());
+    if prompt.model.is_none() {
+        prompt.model = Some(default_model);
+    }
     let req = server_err!(
         Request::builder()
             .method(parts.method)
