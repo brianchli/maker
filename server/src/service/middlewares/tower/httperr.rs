@@ -63,9 +63,7 @@ where
             Ok(resp) => {
                 let (parts, body) = resp.into_parts();
                 // this handles network back pressure for us.
-                let stream = body
-                    .into_data_stream()
-                    .map(|res| res.map(hyper::body::Frame::data));
+                let stream = body.into_data_stream().map(|res| res.map(hyper::body::Frame::data));
                 let body = StreamBody::new(stream);
                 let body = BoxBody::new(body);
                 Ready(Ok(hyper::Response::from_parts(parts, body)))
@@ -103,10 +101,9 @@ where
             method = %parts.method.as_str(),
         );
 
-        if let (Some(ip), Some(host)) = (
-            parts.headers.get("cf-connecting-ip"),
-            parts.headers.get(HOST),
-        ) {
+        if let (Some(ip), Some(host)) =
+            (parts.headers.get("cf-connecting-ip"), parts.headers.get(HOST))
+        {
             if let (Ok(ip), Ok(host)) = (ip.to_str(), host.to_str()) {
                 span.in_scope(|| {
                     info!(ip = %ip, host = %host, "Incoming external request");

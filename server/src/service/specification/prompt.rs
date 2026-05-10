@@ -92,26 +92,18 @@ impl TryFrom<(TomlSpec, Filetype)> for ResolvedPrompt {
         prompt.push_str(SCHEMA);
 
         match &file_t {
-            Filetype::Make { content } => write!(
-                &mut prompt,
-                r#";the output should be a valid mk: {};"#,
-                content
-            )?,
-            Filetype::Cmake { content } => write!(
-                &mut prompt,
-                r#";the output should be a valid cm file: {};"#,
-                content
-            )?,
-            Filetype::Readme { content } => write!(
-                &mut prompt,
-                r#";the output should be a valid rdme: {};"#,
-                content
-            )?,
-            Filetype::Docker { content } => write!(
-                &mut prompt,
-                r#";the output file should be a valid dkr file: {};"#,
-                content
-            )?,
+            Filetype::Make { content } => {
+                write!(&mut prompt, r#";the output should be a valid mk: {};"#, content)?
+            }
+            Filetype::Cmake { content } => {
+                write!(&mut prompt, r#";the output should be a valid cm file: {};"#, content)?
+            }
+            Filetype::Readme { content } => {
+                write!(&mut prompt, r#";the output should be a valid rdme: {};"#, content)?
+            }
+            Filetype::Docker { content } => {
+                write!(&mut prompt, r#";the output file should be a valid dkr file: {};"#, content)?
+            }
             Filetype::Spec { content } => write!(
                 &mut prompt,
                 r#";the output file should be a valid toml file: {};"#,

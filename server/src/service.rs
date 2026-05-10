@@ -43,10 +43,6 @@ impl AppState {
         specifications: PathBuf,
         default_model: String,
     ) -> Self {
-        Self {
-            ollama_uri,
-            specifications,
-            default_model,
-        }
+        Self { ollama_uri, specifications, default_model }
     }
 }

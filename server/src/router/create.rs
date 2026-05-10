@@ -15,8 +15,7 @@ use tracing::{event, info};
 use crate::{
     bad_request, server_err,
     service::{
-        AppState, Filetype, OllamaResponse, Req, ResolvedPrompt, Response, TomlSpec,
-        error_response,
+        AppState, Filetype, OllamaResponse, Req, ResolvedPrompt, Response, TomlSpec, error_response,
     },
     some_or_err,
 };
@@ -43,11 +42,7 @@ where
 }
 
 async fn maker_run<B>(
-    AppState {
-        ollama_uri,
-        mut specifications,
-        default_model,
-    }: AppState,
+    AppState { ollama_uri, mut specifications, default_model }: AppState,
     req: Req<B>,
 ) -> Result<Response, BoxError>
 where
@@ -73,9 +68,8 @@ where
     });
 
     let (parts, body) = req.into_parts();
-    let filetype: Filetype = bad_request!(serde_json::from_slice(
-        &server_err!(body.collect().await).to_bytes()
-    ));
+    let filetype: Filetype =
+        bad_request!(serde_json::from_slice(&server_err!(body.collect().await).to_bytes()));
 
     specifications.push(match &filetype {
         Filetype::Make { .. } => "make.toml",
@@ -101,16 +95,11 @@ where
             .uri(OllamaEndpoints::Generate)
             .header(
                 HOST,
-                some_or_err!(
-                    ollama_uri.authority(),
-                    "malformed authority for ollama path"
-                )
-                .as_str()
+                some_or_err!(ollama_uri.authority(), "malformed authority for ollama path")
+                    .as_str()
             )
             .header(CONTENT_TYPE, r#"application/json"#)
-            .body(Full::<Bytes>::new(
-                server_err!(serde_json::to_string(&prompt)).into()
-            ))
+            .body(Full::<Bytes>::new(server_err!(serde_json::to_string(&prompt)).into()))
     );
 
     let res = server_err!(http.send_request(req).await);
@@ -138,8 +127,6 @@ where
 
     let body: Full<Bytes> = Full::from(response.into_bytes());
     let mut response = hyper::Response::new(BoxBody::new(body));
-    response
-        .headers_mut()
-        .insert(CONTENT_TYPE, "text/plain; charset=utf-8".parse().unwrap());
+    response.headers_mut().insert(CONTENT_TYPE, "text/plain; charset=utf-8".parse().unwrap());
     Ok(response)
 }

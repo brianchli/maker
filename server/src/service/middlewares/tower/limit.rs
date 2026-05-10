@@ -17,11 +17,7 @@ pub struct RateLimiter {
 
 impl RateLimiter {
     pub fn new(requests: u64, seconds: u64, f: PredicateFn<Incoming>) -> Self {
-        Self {
-            requests,
-            duration: Duration::from_secs(seconds),
-            f,
-        }
+        Self { requests, duration: Duration::from_secs(seconds), f }
     }
 }
 

@@ -22,9 +22,7 @@ pub(crate) fn server_init() -> Result<(AppState, SocketAddr), error::ServerError
         .try_exists()
         .map_err(|_| error::ServerError::new("Unable to find specifications directory".into()))?
     {
-        return Err(error::ServerError::new(
-            "Unable to find specifications directory".into(),
-        ));
+        return Err(error::ServerError::new("Unable to find specifications directory".into()));
     }
 
     let state = AppState::new(
@@ -52,10 +50,7 @@ pub(crate) enum RequestOrigin {
 
 pub(crate) fn is_private_request(req: Req<Incoming>) -> (RequestOrigin, Req<Incoming>) {
     let (parts, body) = req.into_parts();
-    let origin = classify_origin(
-        parts.uri.host(),
-        parts.headers.get("cf-connecting-ip").is_some(),
-    );
+    let origin = classify_origin(parts.uri.host(), parts.headers.get("cf-connecting-ip").is_some());
     (origin, Request::from_parts(parts, body))
 }
 
