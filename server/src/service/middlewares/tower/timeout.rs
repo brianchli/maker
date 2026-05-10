@@ -20,10 +20,7 @@ pub struct TimeoutLayer {
 
 impl TimeoutLayer {
     pub fn from_mins(minutes: u64, f: PredicateFn<Incoming>) -> Self {
-        Self {
-            duration: Duration::from_mins(minutes),
-            f,
-        }
+        Self { duration: Duration::from_mins(minutes), f }
     }
 }
 
@@ -49,11 +46,6 @@ where
             )
         }
 
-        Self::Service::new(
-            inner,
-            Timeout::new(other, self.duration),
-            self.f.clone(),
-            timeout_span,
-        )
+        Self::Service::new(inner, Timeout::new(other, self.duration), self.f.clone(), timeout_span)
     }
 }

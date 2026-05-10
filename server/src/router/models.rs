@@ -19,11 +19,7 @@ use crate::{
 };
 
 pub(crate) async fn list_models<B>(
-    AppState {
-        ollama_uri,
-        specifications: _,
-        default_model: _,
-    }: AppState,
+    AppState { ollama_uri, specifications: _, default_model: _ }: AppState,
     req: Req<B>,
 ) -> Result<Response, BoxError>
 where
@@ -54,11 +50,8 @@ where
             .uri(OllamaEndpoints::Tags)
             .header(
                 HOST,
-                some_or_err!(
-                    ollama_uri.authority(),
-                    "malformed authority for ollama path"
-                )
-                .as_str()
+                some_or_err!(ollama_uri.authority(), "malformed authority for ollama path")
+                    .as_str()
             )
             .header(CONTENT_TYPE, r#"application/json"#)
             .body(Empty::<Bytes>::new())

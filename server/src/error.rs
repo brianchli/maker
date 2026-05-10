@@ -4,9 +4,7 @@ macro_rules! generic_error_wrapper {
     ($error: ty) => {
         impl From<$error> for ServerError {
             fn from(e: $error) -> Self {
-                Self {
-                    kind: ErrorKind::Other(e.to_string()),
-                }
+                Self { kind: ErrorKind::Other(e.to_string()) }
             }
         }
     };
@@ -27,9 +25,7 @@ pub(crate) struct ServerError {
 
 impl ServerError {
     pub(crate) fn new(reason: String) -> Self {
-        Self {
-            kind: ErrorKind::Server(reason),
-        }
+        Self { kind: ErrorKind::Server(reason) }
     }
 }
 

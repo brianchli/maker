@@ -35,12 +35,7 @@ impl<S1, S2> ConditionalService<S1, S2> {
         predicate: PredicateFn<Incoming>,
         span_generator: fn(&Req<Incoming>) -> Span,
     ) -> Self {
-        Self {
-            service_1,
-            service_2,
-            predicate,
-            span_generator,
-        }
+        Self { service_1, service_2, predicate, span_generator }
     }
 }
 
