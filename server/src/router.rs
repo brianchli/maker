@@ -1,5 +1,6 @@
 mod create;
 mod models;
+mod specs;
 
 use std::fmt::Display;
 use std::str::FromStr;
@@ -11,6 +12,7 @@ use tower::BoxError;
 use crate::router::create::create_route;
 use crate::router::models::models_route;
 
+use crate::router::specs::specs_route;
 use crate::service::Response;
 use crate::{
     bad_request,
@@ -51,6 +53,7 @@ where
     Ok(match req.uri().path() {
         "/create" => bad_request!(create_route(state, req).await),
         "/models" => bad_request!(models_route(state, req).await),
+        "/specs" => bad_request!(specs_route(state, req).await),
         _ => bad_request!(Err("not found")),
     })
 }
