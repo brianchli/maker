@@ -17,7 +17,7 @@ CURL_OPTS=(-s --fail -H "Accept: application/json")
 
 _maker_usage() {
   cat <<EOF
-maker-util: ergonomic CLI invoking the Maker Endpoint
+maker-util: ergonomic CLI for invoking the Maker Endpoint
 
 Usage:
   maker-util [command] [args]
@@ -57,7 +57,7 @@ case ${COMMAND} in
 
   "create")
     if [[ -z ${FILE_T} ]]; then
-      FILE_T=$(gum choose --header "filetype" "cmake" "docker" "make" "readme" "spec") || exit 0
+      FILE_T=$(curl -fs ${MAKER_ENDPOINT}/specs 2>/dev/null | jq -r '.[]' | gum choose --header "filetype") || exit 0
     fi
 
     CONTENT=$(gum write \
