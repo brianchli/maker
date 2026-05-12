@@ -12,6 +12,7 @@ services:
     environment:
       - BACKEND_PORT=${BACKEND_PORT}
       - OLLAMA_PORT=${OLLAMA_PORT}
+      - DEFAULT_OLLAMA_MODEL=${DEFAULT_OLLAMA_MODEL}
     volumes:
       - ./config/maker:/app/config
       - ./data/maker/specifications:/app/specifications
