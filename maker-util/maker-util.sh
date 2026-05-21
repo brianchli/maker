@@ -44,15 +44,14 @@ case ${COMMAND} in
     curl "${CURL_OPTS[@]}" "${MAKER_ENDPOINT}/models" | jq -r '
   ["MODEL","REMOTE","HOST","SIZE","UPDATED","DIGEST"],
   (.models[] | [
-    .name,
     .model,
     .remote_model,
     .remote_host[8:],
     (.size | tostring),
     (.modified_at[0:16]),
-    (.digest[0:12] + "...")
+    (.digest[0:16] + "...")
   ]) | @tsv
-' | gum table || exit 0
+' | column -t -s $'\t' | gum table || exit 0
     ;;
 
   "create")
