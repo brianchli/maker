@@ -23,6 +23,7 @@ pub(crate) enum Filetype {
     Readme { content: String },
     Docker { content: String },
     Spec { content: String },
+    Anki { content: String },
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -78,6 +79,7 @@ impl Display for Filetype {
             Filetype::Readme { .. } => write!(f, "README"),
             Filetype::Docker { .. } => write!(f, "Docker"),
             Filetype::Spec { .. } => write!(f, "Spec"),
+            Filetype::Anki { .. } => write!(f, "Anki"),
         }
     }
 }
@@ -105,6 +107,11 @@ impl TryFrom<(TomlSpec, Filetype)> for ResolvedPrompt {
                 write!(&mut prompt, r#";the output file should be a valid dkr file: {};"#, content)?
             }
             Filetype::Spec { content } => write!(
+                &mut prompt,
+                r#";the output file should be a valid toml file: {};"#,
+                content
+            )?,
+            Filetype::Anki { content } => write!(
                 &mut prompt,
                 r#";the output file should be a valid toml file: {};"#,
                 content

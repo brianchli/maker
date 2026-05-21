@@ -77,6 +77,7 @@ where
         Filetype::Readme { .. } => "readme.toml",
         Filetype::Docker { .. } => "docker.toml",
         Filetype::Spec { .. } => "spec.toml",
+        Filetype::Anki { .. } => "anki.toml",
     });
 
     let spec: TomlSpec = server_err!(toml::from_slice(
